@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
@@ -25,7 +25,8 @@ describe("application routes", () => {
     renderRoute("/investigations/redirect-chain");
 
     expect(screen.getByRole("heading", { name: "Multi-hop redirect chain" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /Canonical host/i }));
+    const canvas = screen.getByTestId("journey-canvas");
+    await user.click(within(canvas).getByRole("button", { name: /Canonical host/i }));
     expect(screen.getByRole("heading", { name: "Canonical host" })).toBeInTheDocument();
     expect(screen.getByText("https://www.example.com/shop")).toBeInTheDocument();
   });
