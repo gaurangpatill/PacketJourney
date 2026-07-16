@@ -60,6 +60,18 @@ describe("JourneyCanvas", () => {
     expect(container.querySelectorAll(".graph-edge.is-playing")).toHaveLength(0);
   });
 
+  it("supports explicit zoom and view controls", async () => {
+    const user = userEvent.setup();
+    renderCanvas();
+    const zoom = screen.getByRole("status", { name: "Zoom level" });
+    const initial = zoom.textContent;
+    await user.click(screen.getByRole("button", { name: "Zoom in" }));
+    expect(zoom.textContent).not.toBe(initial);
+    await user.click(screen.getByRole("button", { name: "Fit journey to view" }));
+    await user.click(screen.getByRole("button", { name: "Reset graph view" }));
+    expect(zoom).toHaveTextContent("100%");
+  });
+
   it("renders a safe empty state", () => {
     const emptyGraph = buildInvestigationGraph({
       stages: [],
@@ -96,5 +108,20 @@ describe("useJourneyController", () => {
     expect(result.current.revealedIndex).toBe(graph.nodes.length - 1);
     expect(result.current.selectedNodeId).toBe(graph.nodes.at(-1)?.id);
     expect(result.current.playing).toBe(false);
+  });
+
+  it("progresses normal playback one stage at a time", () => {
+    vi.useFakeTimers();
+    const { result } = renderHook(() => useJourneyController(graph, false));
+    act(() => result.current.restart());
+    act(() => result.current.play());
+    expect(result.current.playing).toBe(true);
+    act(() => {
+      vi.advanceTimersByTime(720);
+    });
+    expect(result.current.revealedIndex).toBe(1);
+    expect(result.current.selectedNodeId).toBe(graph.nodes[1]?.id);
+    act(() => result.current.pause());
+    vi.useRealTimers();
   });
 });

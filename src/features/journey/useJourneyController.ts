@@ -5,13 +5,13 @@ export type JourneyController = ReturnType<typeof useJourneyController>;
 
 export function useJourneyController(graph: InvestigationGraph, reducedMotion: boolean) {
   const lastIndex = Math.max(0, graph.nodes.length - 1);
-  const [selectedNodeId, setSelectedNodeId] = useState<string | undefined>(graph.nodes[0]?.id);
+  const [selectedNodeId, setSelectedNodeId] = useState<string>();
   const [selectedEdgeId, setSelectedEdgeId] = useState<string>();
   const [revealedIndex, setRevealedIndex] = useState(lastIndex);
   const [playing, setPlaying] = useState(false);
 
   useEffect(() => {
-    setSelectedNodeId(graph.nodes[0]?.id);
+    setSelectedNodeId(undefined);
     setSelectedEdgeId(undefined);
     setRevealedIndex(Math.max(0, graph.nodes.length - 1));
     setPlaying(false);

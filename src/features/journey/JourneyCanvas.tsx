@@ -9,7 +9,7 @@ import { accessibleNodeLabel, nodeDescription, nodeTitle } from "./presentation"
 type Viewport = { x: number; y: number; scale: number };
 type CanvasSize = { width: number; height: number };
 
-const minScale = 0.35;
+const minScale = 0.18;
 const maxScale = 2;
 
 function clampScale(scale: number) {

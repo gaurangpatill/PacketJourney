@@ -51,6 +51,19 @@ describe("journey workspace integration", () => {
     expect(within(graph).getAllByRole("button")).toHaveLength(before);
   });
 
+  it("exposes collection timestamps in network-engineer mode", async () => {
+    const user = userEvent.setup();
+    renderWorkspace("fast-cached");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Expertise mode" }), "engineer");
+    const canvas = screen.getByTestId("journey-canvas");
+    await user.click(
+      within(canvas).getByRole("button", { name: /^DNS resolution.*success stage/i }),
+    );
+    const inspector = screen.getByRole("complementary", { name: "Evidence inspector" });
+    expect(within(inspector).getAllByText("2026-07-16T04:15:12.000Z")).toHaveLength(2);
+    expect(within(inspector).getAllByText("Recorded diagnostic fixture")).toHaveLength(2);
+  });
+
   it("selects and reveals a stage from the timeline", async () => {
     const user = userEvent.setup();
     renderWorkspace("slow-origin");

@@ -34,6 +34,29 @@ describe("buildInvestigationGraph", () => {
     const graph = buildInvestigationGraph(getInvestigation("slow-origin"));
     expect(graph.bottleneckId).toBe("origin");
     expect(graph.nodes.find((node) => node.id === "origin")?.isBottleneck).toBe(true);
+    expect(graph.primaryNodeIds).toEqual([
+      "input",
+      "dns",
+      "tls",
+      "edge",
+      "cache",
+      "origin",
+      "edge-return",
+      "browser",
+    ]);
+    expect(graph.edges.find((edge) => edge.id === "origin::edge-return")?.relationship).toBe(
+      "return",
+    );
+  });
+
+  it("associates the missing-cache warning and finding with the cache stage", () => {
+    const graph = buildInvestigationGraph(getInvestigation("missing-cache"));
+    const cache = graph.nodes.find((node) => node.id === "cache");
+    expect(cache?.stage.status).toBe("warning");
+    expect(cache?.relatedFindings.map((finding) => finding.id)).toContain("cache-f1");
+    expect(graph.edges.find((edge) => edge.id === "origin::edge-return")?.relationship).toBe(
+      "return",
+    );
   });
 
   it("creates secondary inferred and resource branches", () => {
