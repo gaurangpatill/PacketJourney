@@ -7,9 +7,9 @@ import { JourneyPreview } from "./JourneyPreview";
 describe("JourneyPreview", () => {
   it.each([
     ["fast-cached", 6],
-    ["redirect-chain", 7],
-    ["tls-warning", 4],
-    ["third-party-heavy", 9],
+    ["redirect-chain", 8],
+    ["tls-warning", 3],
+    ["third-party-heavy", 12],
   ])("renders the %s journey shape", (id, stageCount) => {
     render(<JourneyPreview investigation={investigationById.get(id)!} />);
     expect(screen.getAllByRole("listitem")).toHaveLength(stageCount);

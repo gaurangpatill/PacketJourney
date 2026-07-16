@@ -30,4 +30,16 @@ describe("investigationSchema", () => {
 
     expect(investigationSchema.safeParse(invalid).success).toBe(false);
   });
+
+  it("rejects duplicate stage and evidence IDs", () => {
+    const source = investigations[0]!;
+    const duplicateStage = {
+      ...source.stages[1]!,
+      id: source.stages[0]!.id,
+      connections: [],
+      evidence: [{ ...source.stages[0]!.evidence[0]! }],
+    };
+    const invalid = { ...source, stages: [source.stages[0]!, duplicateStage] };
+    expect(investigationSchema.safeParse(invalid).success).toBe(false);
+  });
 });

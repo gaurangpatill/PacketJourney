@@ -105,13 +105,38 @@ export const investigationSchema = z
     mock: z.boolean(),
   })
   .superRefine((investigation, context) => {
-    const stageIds = new Set(investigation.stages.map((stage) => stage.id));
-    const evidenceIds = new Set(
-      investigation.stages.flatMap((stage) => stage.evidence.map((item) => item.id)),
+    const allStageIds = investigation.stages.map((stage) => stage.id);
+    const allEvidenceIds = investigation.stages.flatMap((stage) =>
+      stage.evidence.map((item) => item.id),
     );
+    const stageIds = new Set(allStageIds);
+    const evidenceIds = new Set(allEvidenceIds);
+
+    if (stageIds.size !== allStageIds.length) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Stage IDs must be unique within an investigation",
+        path: ["stages"],
+      });
+    }
+
+    if (evidenceIds.size !== allEvidenceIds.length) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Evidence IDs must be unique within an investigation",
+        path: ["stages"],
+      });
+    }
 
     for (const stage of investigation.stages) {
       for (const connection of stage.connections) {
+        if (connection === stage.id) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `Stage ${stage.id} cannot connect to itself`,
+            path: ["stages"],
+          });
+        }
         if (!stageIds.has(connection)) {
           context.addIssue({
             code: z.ZodIssueCode.custom,
