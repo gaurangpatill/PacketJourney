@@ -62,7 +62,7 @@ In Layer 1, the orchestrator boundary is represented by seeded mock investigatio
 ## Layer-by-layer milestone checklist
 
 - [x] Layer 1 — Product foundation
-- [ ] Layer 2 — Adaptive journey visualization
+- [ ] Layer 2 — Adaptive journey visualization (in progress)
 - [ ] Layer 3 — Deterministic HTTP investigation and SSRF-safe fetch
 - [ ] Layer 4 — DNS and TLS investigation
 - [ ] Layer 5 — Browser investigation
