@@ -1,5 +1,7 @@
 # Journey visualization
 
+Status: Layer 2 complete on 2026-07-16.
+
 ## Layer 2 objective
 
 Replace the Layer 1 stage strip with the central Packet Journey experience: a reusable, accessible, interactive graph that renders stable network journeys entirely from validated investigation data. Layer 2 remains fixture-only and introduces no networking or Cloudflare runtime integration.
@@ -65,3 +67,7 @@ Reduced-motion users receive immediate reveals and no moving edge signal. Contro
 - Empty and malformed adapter inputs degrade safely.
 - A synthetic 50-node/100-edge graph adapts and lays out without overlap or unstable output.
 - Formatting, strict type checking, zero-warning lint, unit/component tests, production build, full dependency audit, and development smoke tests pass.
+
+## Layer 2 result
+
+The implementation meets the acceptance criteria with 42 passing tests, a clean production build and dependency audit, and browser-verified fixture rendering. No graph dependency or state-management library was added. Networking and Cloudflare runtime work remain outside this layer.

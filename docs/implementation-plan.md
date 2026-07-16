@@ -62,7 +62,7 @@ In Layer 1, the orchestrator boundary is represented by seeded mock investigatio
 ## Layer-by-layer milestone checklist
 
 - [x] Layer 1 — Product foundation
-- [ ] Layer 2 — Adaptive journey visualization (in progress)
+- [x] Layer 2 — Adaptive journey visualization
 - [ ] Layer 3 — Deterministic HTTP investigation and SSRF-safe fetch
 - [ ] Layer 4 — DNS and TLS investigation
 - [ ] Layer 5 — Browser investigation
@@ -131,3 +131,38 @@ Known limitations:
 - Expertise modes currently change explanatory detail and provenance visibility; deeper protocol fields arrive with live DNS/TLS collection.
 - No visual screenshot is committed yet because a browser-rendering test dependency has not been introduced.
 - Git was not available in the workspace, so no milestone commit was created.
+
+### Layer 2 — Adaptive journey visualization (complete, 2026-07-16)
+
+Implemented:
+
+- Pure investigation-to-graph adapter with primary/secondary path detection, six relationship types, finding joins, confidence, termination, and bottleneck derivation.
+- Stable custom layered layout with no scenario-specific coordinates, overlap tests, malformed-input fallback, and a 50-node/100-edge performance fixture.
+- Custom SVG journey canvas with accessible HTML nodes, directed edges, pan, wheel/controls zoom, fit, reset, responsive measurement, and restrained playback signals.
+- Distinct visual and textual states for primary/secondary paths, verified/inferred data, warnings, errors, selected/dimmed items, and measured bottlenecks.
+- Pointer and keyboard node/edge selection, Escape clearing, directional node traversal, and visible focus states.
+- Timeline scrubber, stage skipping, playback, pause, restart, progressive reveal, and graph/timeline synchronization.
+- Node and edge evidence inspection with status, timing, raw values, provenance, timestamps, related findings, and expertise-mode depth.
+- Corrected fixtures for edge return paths, redirect final URL, TLS termination, and analytics/font/script/image/advertising/support branches.
+- Responsive mobile composition and instant reduced-motion playback.
+- Headless browser screenshot committed at `docs/assets/journey-visualization.png`.
+
+Validation:
+
+- `npm run format` — passed.
+- `npm run typecheck` — passed with strict and unchecked-index rules.
+- `npm run lint` — passed with zero warnings.
+- `npm run test` — 42 tests passed across seven files.
+- `npm run build` — passed; 366.44 kB JavaScript / 108.15 kB gzip and 41.82 kB CSS / 8.84 kB gzip.
+- `npm audit` — zero production or development vulnerabilities.
+- Development smoke test — landing, explore, empty investigation, and all seven seeded investigation routes returned HTTP 200.
+- Manual Chrome review — all seeded shapes, 1440 px desktop, narrow viewport, primary/branch hierarchy, warning/error termination, selection/inspector, and timeline composition checked.
+- Automated interaction review — keyboard traversal, Escape, reduced motion, normal playback, graph/timeline synchronization, expertise modes, node/edge selection, and inspector updates passed component tests.
+
+Known limitations:
+
+- Evidence remains fixture-backed; Layer 3 has not started.
+- Layout targets directed acyclic request journeys. Cyclic malformed input degrades defensively rather than receiving specialized cycle routing.
+- Fit-to-view prioritizes the whole journey; large graphs require zoom for detailed reading. Evidence-based semantic clustering is deferred until browser traces exist.
+- Touch gestures use drag pan and explicit zoom controls; multi-touch pinch handling is not yet specialized.
+- The compact landing-page preview remains intentionally non-interactive; the investigation workspace is the full central visualization.
