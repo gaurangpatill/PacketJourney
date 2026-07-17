@@ -17,6 +17,16 @@ export const stageTypeSchema = z.enum([
 export const stageStatusSchema = z.enum(["pending", "active", "success", "warning", "error"]);
 export const evidenceConfidenceSchema = z.enum(["verified", "inferred"]);
 
+export const simulationMetadataSchema = z
+  .object({
+    isSimulated: z.literal(true),
+    scenarioId: z.string().min(1).max(160),
+    ruleId: z.string().min(1).max(160),
+    label: z.literal("SIMULATED · NOT MEASURED"),
+    state: z.enum(["added", "modified", "unchanged", "unreachable"]).optional(),
+  })
+  .strict();
+
 export const evidenceItemSchema = z.object({
   id: z.string().min(1),
   label: z.string().min(1),
@@ -24,6 +34,7 @@ export const evidenceItemSchema = z.object({
   source: z.string().min(1),
   collectedAt: z.string().datetime(),
   confidence: evidenceConfidenceSchema,
+  simulation: simulationMetadataSchema.optional(),
 });
 
 export const journeyStageSchema = z.object({
@@ -39,6 +50,7 @@ export const journeyStageSchema = z.object({
   evidence: z.array(evidenceItemSchema),
   connections: z.array(z.string()),
   branch: z.number().int().min(0).default(0),
+  simulation: simulationMetadataSchema.optional(),
 });
 
 export const findingSchema = z.object({
@@ -59,6 +71,7 @@ export const findingSchema = z.object({
   evidenceIds: z.array(z.string()),
   recommendation: z.string().optional(),
   confidence: z.number().min(0).max(1),
+  simulation: simulationMetadataSchema.optional(),
 });
 
 export const artifactReferenceSchema = z.object({
@@ -122,6 +135,17 @@ export const investigationSchema = z
     metrics: investigationMetricsSchema,
     artifacts: z.array(artifactReferenceSchema),
     mock: z.boolean(),
+    simulation: z
+      .object({
+        isSimulated: z.literal(true),
+        sourceInvestigationId: z.string().min(1).max(160),
+        scenarioId: z.string().min(1).max(160),
+        ruleId: z.string().min(1).max(160),
+        engineVersion: z.string().min(1).max(40),
+        label: z.literal("SIMULATED · NOT MEASURED"),
+      })
+      .strict()
+      .optional(),
   })
   .superRefine((investigation, context) => {
     const allStageIds = investigation.stages.map((stage) => stage.id);
