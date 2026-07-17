@@ -131,6 +131,25 @@ export function createRouter(dependencies: RouterDependencies = {}) {
       }
 
       try {
+        if (env.HTTP_INVESTIGATION_RATE_LIMITER) {
+          const key = request.headers.get("cf-connecting-ip") ?? "unidentified-client";
+          const rateLimit = await env.HTTP_INVESTIGATION_RATE_LIMITER.limit({
+            key: `${INVESTIGATION_PATH}:${key}`,
+          });
+          if (!rateLimit.success) {
+            logEvent("warn", "investigation.rate_limited");
+            return errorResponse(
+              {
+                code: "rate_limited",
+                message: "Too many live investigations were requested. Try again shortly.",
+                retryable: true,
+              },
+              429,
+              headers,
+            );
+          }
+        }
+
         const body = await readRequestBody(request);
         const parsedRequest = createHttpInvestigationRequestSchema.safeParse(body);
         if (!parsedRequest.success) {

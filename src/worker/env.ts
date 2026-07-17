@@ -3,6 +3,7 @@ export interface Env {
   CORS_ALLOWED_ORIGINS?: string;
   HTTP_HOP_TIMEOUT_MS?: string;
   HTTP_OVERALL_TIMEOUT_MS?: string;
+  HTTP_INVESTIGATION_RATE_LIMITER?: RateLimit;
 }
 
 export interface RuntimeLimits {

@@ -6,6 +6,16 @@
   "observability": {
     "enabled": true,
   },
+  "ratelimits": [
+    {
+      "name": "HTTP_INVESTIGATION_RATE_LIMITER",
+      "namespace_id": "2391001",
+      "simple": {
+        "limit": 20,
+        "period": 60,
+      },
+    },
+  ],
   "vars": {
     "ENVIRONMENT": "production",
   },
@@ -15,6 +25,16 @@
       "vars": {
         "ENVIRONMENT": "preview",
       },
+      "ratelimits": [
+        {
+          "name": "HTTP_INVESTIGATION_RATE_LIMITER",
+          "namespace_id": "2391002",
+          "simple": {
+            "limit": 20,
+            "period": 60,
+          },
+        },
+      ],
     },
   },
 }

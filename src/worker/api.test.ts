@@ -169,4 +169,22 @@ describe("POST /api/v1/investigations/http", () => {
     expect(response.status).toBe(405);
     expect(response.headers.get("allow")).toBe("POST, OPTIONS");
   });
+
+  it("applies the Cloudflare rate limiter before investigation work", async () => {
+    const targetFetch = vi.fn();
+    const limit = vi.fn().mockResolvedValue({ success: false });
+    const router = createRouter({ resolver: new PublicResolver(), targetFetch });
+    const response = await router(investigationRequest("https://example.com"), {
+      HTTP_INVESTIGATION_RATE_LIMITER: { limit },
+    });
+
+    expect(response.status).toBe(429);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "rate_limited", retryable: true },
+    });
+    expect(limit).toHaveBeenCalledWith({
+      key: "/api/v1/investigations/http:unidentified-client",
+    });
+    expect(targetFetch).not.toHaveBeenCalled();
+  });
 });

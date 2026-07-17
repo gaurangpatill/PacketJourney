@@ -3,6 +3,7 @@ export type InvestigationErrorCode =
   | "invalid_url"
   | "blocked_destination"
   | "method_not_allowed"
+  | "rate_limited"
   | "not_found"
   | "timeout"
   | "upstream_error"
