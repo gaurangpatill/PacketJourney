@@ -1,6 +1,28 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from "vitest";
-import { CloudflareDohResolver } from "./dns";
+import { AddressResolverDnsQueryClient, CloudflareDohClient, CloudflareDohResolver } from "./dns";
+
+describe("DNS query provenance", () => {
+  it("labels direct Cloudflare DoH results with the resolver API source", async () => {
+    const client = new CloudflareDohClient(
+      vi.fn().mockResolvedValue(Response.json({ Status: 0, Answer: [] })),
+    );
+
+    await expect(client.query("example.com", "A")).resolves.toMatchObject({
+      source: "Cloudflare 1.1.1.1 DNS-over-HTTPS JSON API",
+    });
+  });
+
+  it("labels compatibility results as injected resolver evidence", async () => {
+    const client = new AddressResolverDnsQueryClient({
+      resolve: vi.fn().mockResolvedValue(["93.184.216.34"]),
+    });
+
+    await expect(client.query("example.com", "A")).resolves.toMatchObject({
+      source: "Injected address resolver adapter",
+    });
+  });
+});
 
 describe("CloudflareDohResolver", () => {
   it("collects only A and AAAA addresses from bounded responses", async () => {

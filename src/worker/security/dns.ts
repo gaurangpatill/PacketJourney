@@ -131,7 +131,7 @@ export class CloudflareDohClient implements DnsQueryClient {
       response: parsed.data,
       collectedAt: this.wallClockNow().toISOString(),
       durationMs: roundedDuration(started, this.monotonicNow()),
-      source: "Injected address resolver adapter",
+      source: "Cloudflare 1.1.1.1 DNS-over-HTTPS JSON API",
     };
   }
 }
@@ -223,7 +223,7 @@ export class AddressResolverDnsQueryClient implements DnsQueryClient {
       },
       collectedAt: this.wallClockNow().toISOString(),
       durationMs: 0,
-      source: "Cloudflare 1.1.1.1 DNS-over-HTTPS JSON API",
+      source: "Injected address resolver adapter",
     };
   }
 }
