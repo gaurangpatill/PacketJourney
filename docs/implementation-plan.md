@@ -487,15 +487,15 @@ Implemented:
 - A fixed pure TypeScript registry for redirect removal, edge-cached HTML, origin-duration reduction, JavaScript transfer reduction, third-party-group removal, critical-resource recovery, certificate expiry, and DNS-address removal.
 - Deterministic evidence-based suggestions, source/evidence reference checks, stable output for identical input, simulated finding separation, resolved observed findings, and failure termination with unreachable downstream context.
 - Structured scenario controls with explicit failure confirmation, side-by-side graph/timeline comparison, synchronized selection/playback controls, non-color node states, evidence comparison, assumptions, metric decisions, simulated findings, five-result memory-only history, duplicate suppression, reset, and bounded JSON export.
-- Optional post-simulation AI explanation through the existing guarded diagnosis surface. The AI receives only the completed simulated investigation and has no scenario, rule, arithmetic, or mutation tool.
+- Optional post-simulation AI explanation through the existing guarded diagnosis surface. The AI receives the completed simulated investigation plus bounded change/assumption provenance, must cite exact IDs, and has no scenario, rule, arithmetic, or mutation tool.
 - Architecture, schema, security, rule catalog, engine contract, evaluation matrix, Layer 8 persistence direction, and README updates.
 
 Validation:
 
 - `npm run format`, strict `npm run typecheck`, and zero-warning `npm run lint` — passed.
-- `npm run test` — 261 tests passed across 43 files, including all Layer 1–6 regressions and all eight scenarios.
-- `npm run build:web` — passed; 436.54 kB JavaScript / 126.92 kB gzip and 59.20 kB CSS / 11.77 kB gzip.
-- `npm run build:worker` — passed; 3,877.90 KiB upload / 772.78 KiB gzip and existing Browser Run, R2, Workers AI, and Rate Limiting bindings recognized. Layer 7 added no Worker binding or endpoint.
+- `npm run test` — 263 tests passed across 43 files, including all Layer 1–6 regressions and all eight scenarios.
+- `npm run build:web` — passed; 438.02 kB JavaScript / 127.28 kB gzip and 59.50 kB CSS / 11.80 kB gzip.
+- `npm run build:worker` — passed; 3,881.72 KiB upload / 773.60 KiB gzip and existing Browser Run, R2, Workers AI, and Rate Limiting bindings recognized. Layer 7 added no simulation Worker binding or endpoint.
 - `npm audit --audit-level=low` — zero vulnerabilities.
 - Credential-free Worker smoke — `/health` returned 200; combined Vite/Worker smoke returned the SPA route and preserved the proxied structured 403 for a loopback investigation.
 - Headless Chrome review — 1440 px and 500 px observed workspaces plus a completed 1440 px edge-cache comparison checked for responsive controls, labels, graphs, metric policies, assumptions, findings, and no obvious overflow.

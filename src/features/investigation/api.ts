@@ -8,6 +8,7 @@ import {
   aiInvestigationErrorResponseSchema,
   diagnoseInvestigationResponseSchema,
   type AiExpertiseMode,
+  type CounterfactualAiContext,
   type DiagnoseInvestigationResponse,
 } from "./aiSchema";
 import type { Investigation } from "./schema";
@@ -103,6 +104,7 @@ export async function diagnoseInvestigation(input: {
   question: string;
   expertiseMode: AiExpertiseMode;
   selectedStageId?: string;
+  counterfactualContext?: CounterfactualAiContext;
   signal?: AbortSignal;
   fetcher?: ApiFetch;
 }): Promise<DiagnoseInvestigationResponse> {
@@ -119,6 +121,9 @@ export async function diagnoseInvestigation(input: {
           question: input.question,
           expertiseMode: input.expertiseMode,
           ...(input.selectedStageId ? { selectedStageId: input.selectedStageId } : {}),
+          ...(input.counterfactualContext
+            ? { counterfactualContext: input.counterfactualContext }
+            : {}),
         }),
         signal: input.signal,
       },

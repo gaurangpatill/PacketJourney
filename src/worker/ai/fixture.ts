@@ -53,6 +53,30 @@ export class FixtureAiClient implements InvestigationAiClient {
           claim: `The investigation recorded ${evidence.label}.`,
         },
       ],
+      ...(input.context.counterfactual
+        ? {
+            counterfactualReferences: [
+              ...(input.context.counterfactual.changes[0]
+                ? [
+                    {
+                      type: "change" as const,
+                      id: input.context.counterfactual.changes[0].id,
+                      claim: "This value was produced by the registered deterministic rule.",
+                    },
+                  ]
+                : []),
+              ...(input.context.counterfactual.assumptions[0]
+                ? [
+                    {
+                      type: "assumption" as const,
+                      id: input.context.counterfactual.assumptions[0].id,
+                      claim: "This explanation is bounded by the recorded simulation assumption.",
+                    },
+                  ]
+                : []),
+            ],
+          }
+        : {}),
       uncertainties: [
         {
           statement: "This fixture diagnosis does not establish causation.",

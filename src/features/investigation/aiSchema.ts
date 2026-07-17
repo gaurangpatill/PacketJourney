@@ -69,6 +69,47 @@ export const aiEvidenceReferenceSchema = z
   })
   .strict();
 
+export const aiCounterfactualReferenceSchema = z
+  .object({
+    type: z.enum(["change", "assumption"]),
+    id: z.string().min(1).max(200),
+    claim: boundedText(500),
+  })
+  .strict();
+
+export const counterfactualAiContextSchema = z
+  .object({
+    label: z.literal("SIMULATED · NOT MEASURED"),
+    scenarioId: z.string().min(1).max(160),
+    ruleId: z.string().min(1).max(160),
+    engineVersion: z.string().min(1).max(40),
+    changes: z
+      .array(
+        z
+          .object({
+            id: z.string().min(1).max(200),
+            targetId: z.string().min(1).max(240),
+            operation: z.enum(["added", "removed", "modified", "unchanged", "unavailable"]),
+            reason: boundedText(500),
+            sourceEvidenceIds: boundedIds,
+          })
+          .strict(),
+      )
+      .max(24),
+    assumptions: z
+      .array(
+        z
+          .object({
+            id: z.string().min(1).max(200),
+            statement: boundedText(500),
+            importance: z.enum(["low", "medium", "high"]),
+          })
+          .strict(),
+      )
+      .max(16),
+  })
+  .strict();
+
 export const aiUncertaintySchema = z
   .object({
     statement: boundedText(600),
@@ -98,6 +139,7 @@ export const aiDiagnosisDraftSchema = z
     relatedFindings: z.array(aiFindingSchema).max(6),
     prioritizedActions: z.array(aiActionSchema).max(6),
     evidenceReferences: z.array(aiEvidenceReferenceSchema).max(16),
+    counterfactualReferences: z.array(aiCounterfactualReferenceSchema).max(16).optional(),
     uncertainties: z.array(aiUncertaintySchema).max(8),
     followUpQuestions: z.array(boundedText(240)).max(6),
     graphInstructions: aiGraphInstructionsSchema,
@@ -121,6 +163,7 @@ export const diagnoseInvestigationRequestSchema = z
     expertiseMode: aiExpertiseModeSchema,
     investigation: investigationSchema,
     selectedStageId: z.string().min(1).max(160).optional(),
+    counterfactualContext: counterfactualAiContextSchema.optional(),
   })
   .strict();
 
@@ -159,6 +202,8 @@ export type AiCategory = z.infer<typeof aiCategorySchema>;
 export type AiFinding = z.infer<typeof aiFindingSchema>;
 export type AiAction = z.infer<typeof aiActionSchema>;
 export type AiEvidenceReference = z.infer<typeof aiEvidenceReferenceSchema>;
+export type AiCounterfactualReference = z.infer<typeof aiCounterfactualReferenceSchema>;
+export type CounterfactualAiContext = z.infer<typeof counterfactualAiContextSchema>;
 export type AiUncertainty = z.infer<typeof aiUncertaintySchema>;
 export type AiGraphInstructions = z.infer<typeof aiGraphInstructionsSchema>;
 export type AiDiagnosisDraft = z.infer<typeof aiDiagnosisDraftSchema>;

@@ -1528,6 +1528,23 @@ a {
   background: var(--surface-soft);
   cursor: pointer;
 }
+.ai-references > div {
+  display: grid;
+  grid-template-columns: minmax(120px, auto) 1fr;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #0b0f12;
+}
+.ai-references > div code {
+  color: var(--orange-soft);
+  font: 7px var(--font-mono);
+}
+.ai-references > div span {
+  color: var(--muted);
+  font-size: 8px;
+}
 .ai-references code {
   color: var(--orange-soft);
   font-size: 8px;

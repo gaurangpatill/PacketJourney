@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { diagnoseInvestigation, InvestigationApiClientError } from "./api";
-import type { AiDiagnosis, AiExpertiseMode } from "./aiSchema";
+import type { AiDiagnosis, AiExpertiseMode, CounterfactualAiContext } from "./aiSchema";
 import type { ExpertiseMode, Investigation } from "./schema";
 
 const expertiseMap: Record<ExpertiseMode, AiExpertiseMode> = {
@@ -40,6 +40,7 @@ export function AiInvestigationPanel(props: {
   investigation: Investigation;
   expertise: ExpertiseMode;
   selectedStageId?: string;
+  counterfactualContext?: CounterfactualAiContext;
   onDiagnosis: (diagnosis: AiDiagnosis) => void;
   onEvidenceReference: (stageId: string, evidenceId: string) => void;
 }) {
@@ -64,6 +65,7 @@ export function AiInvestigationPanel(props: {
         question: next,
         expertiseMode: expertiseMap[props.expertise],
         selectedStageId: props.selectedStageId,
+        counterfactualContext: props.counterfactualContext,
         signal: controller.signal,
       });
       setDiagnosis(response.diagnosis);
@@ -169,6 +171,17 @@ export function AiInvestigationPanel(props: {
                   <code>{reference.evidenceId}</code>
                   <span>{reference.claim}</span>
                 </button>
+              ))}
+            </div>
+          ) : null}
+          {diagnosis.counterfactualReferences?.length ? (
+            <div className="ai-references">
+              <strong>Simulation provenance</strong>
+              {diagnosis.counterfactualReferences.map((reference) => (
+                <div key={`${reference.type}-${reference.id}`}>
+                  <code>{reference.id}</code>
+                  <span>{reference.claim}</span>
+                </div>
               ))}
             </div>
           ) : null}

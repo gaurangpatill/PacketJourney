@@ -8,6 +8,7 @@ import { suggestCounterfactuals } from "./suggestions";
 import { CounterfactualError } from "./types";
 import { CounterfactualComparison } from "./CounterfactualComparison";
 import { AiInvestigationPanel } from "../investigation/AiInvestigationPanel";
+import type { CounterfactualAiContext } from "../investigation/aiSchema";
 
 const failureTypes = new Set(["expire-certificate", "remove-dns-address"]);
 const scenarioMetadataKeys = new Set(["id", "title", "description", "createdAt", "source"]);
@@ -20,6 +21,27 @@ function scenarioSignature(item: CounterfactualResult) {
         .sort(([left], [right]) => left.localeCompare(right)),
     ),
   );
+}
+
+function aiContext(result: CounterfactualResult): CounterfactualAiContext {
+  return {
+    label: result.label,
+    scenarioId: result.scenario.id,
+    ruleId: result.simulated.simulation!.ruleId,
+    engineVersion: result.engineVersion,
+    changes: result.changes.slice(0, 24).map((change) => ({
+      id: change.id,
+      targetId: change.targetId,
+      operation: change.operation,
+      reason: change.reason,
+      sourceEvidenceIds: change.sourceEvidenceIds,
+    })),
+    assumptions: result.assumptions.slice(0, 16).map((assumption) => ({
+      id: assumption.id,
+      statement: assumption.statement,
+      importance: assumption.importance,
+    })),
+  };
 }
 
 export function CounterfactualWorkspace({
@@ -232,6 +254,7 @@ export function CounterfactualWorkspace({
             <AiInvestigationPanel
               investigation={result.simulated}
               expertise={expertise}
+              counterfactualContext={aiContext(result)}
               onDiagnosis={() => undefined}
               onEvidenceReference={(stageId) =>
                 document

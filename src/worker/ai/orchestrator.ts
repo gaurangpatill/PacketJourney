@@ -4,6 +4,7 @@ import {
   type AiDiagnosis,
   type AiExpertiseMode,
   type AiUsageSummary,
+  type CounterfactualAiContext,
 } from "../../features/investigation/aiSchema";
 import type { Investigation } from "../../features/investigation/schema";
 import { AI_PROMPT_VERSION, type AiRuntimeConfig } from "./config";
@@ -56,6 +57,7 @@ export async function diagnoseInvestigation(input: {
   question: string;
   expertiseMode: AiExpertiseMode;
   selectedStageId?: string;
+  counterfactualContext?: CounterfactualAiContext;
   client: InvestigationAiClient;
   config: AiRuntimeConfig;
 }): Promise<AiInvestigationResult> {
@@ -66,13 +68,23 @@ export async function diagnoseInvestigation(input: {
   ) {
     throw new Error("The selected stage is not part of this investigation.");
   }
+  const counterfactualSerialized = input.counterfactualContext
+    ? JSON.stringify({ counterfactual: input.counterfactualContext })
+    : "";
   const context = selectInvestigationEvidence({
     investigation: input.investigation,
     question,
     expertiseMode: input.expertiseMode,
     selectedStageId: input.selectedStageId,
-    maximumCharacters: input.config.maximumInputCharacters,
+    maximumCharacters: Math.max(
+      4_000,
+      input.config.maximumInputCharacters - counterfactualSerialized.length - 80,
+    ),
   });
+  if (input.counterfactualContext) {
+    context.counterfactual = input.counterfactualContext;
+    context.serialized = `${context.serialized}\nCOUNTERFACTUAL PROVENANCE:\n${counterfactualSerialized}`;
+  }
   const relevant = relevantEvidenceForIntent(context);
   if (relevant.length === 0) {
     const diagnosis = completeDiagnosis({
@@ -114,7 +126,11 @@ export async function diagnoseInvestigation(input: {
     toolResults,
     config: input.config,
   });
-  const draft = validateAiDiagnosisOutput(modelResult.output, input.investigation);
+  const draft = validateAiDiagnosisOutput(
+    modelResult.output,
+    input.investigation,
+    input.counterfactualContext,
+  );
   const diagnosis = completeDiagnosis({
     draft,
     question,

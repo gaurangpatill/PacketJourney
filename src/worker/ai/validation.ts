@@ -3,6 +3,7 @@ import {
   type AiCategory,
   type AiDiagnosisDraft,
   type AiFinding,
+  type CounterfactualAiContext,
 } from "../../features/investigation/aiSchema";
 import type { Investigation } from "../../features/investigation/schema";
 import { categoryForStage } from "./evidenceSelection";
@@ -46,6 +47,7 @@ function categoryCompatible(finding: AiFinding, categories: AiCategory[]): boole
 export function validateAiDiagnosisOutput(
   output: unknown,
   investigation: Investigation,
+  counterfactual?: CounterfactualAiContext,
 ): AiDiagnosisDraft {
   const parsed = aiDiagnosisDraftSchema.safeParse(output);
   if (!parsed.success) {
@@ -62,6 +64,10 @@ export function validateAiDiagnosisOutput(
   );
   const stageIds = new Set(investigation.stages.map((stage) => stage.id));
   const findingIds = new Set(investigation.findings.map((finding) => finding.id));
+  const changeIds = new Set(counterfactual?.changes.map((change) => change.id) ?? []);
+  const assumptionIds = new Set(
+    counterfactual?.assumptions.map((assumption) => assumption.id) ?? [],
+  );
   const evidenceCategories = new Map(
     investigation.stages.flatMap((stage) =>
       stage.evidence.map((item) => [item.id, categoryForStage(stage)] as const),
@@ -82,6 +88,25 @@ export function validateAiDiagnosisOutput(
         "The model attached evidence to the wrong stage.",
       );
     }
+  }
+  for (const reference of draft.counterfactualReferences ?? []) {
+    const allowed = reference.type === "change" ? changeIds : assumptionIds;
+    if (!allowed.has(reference.id)) {
+      throw new AiOutputError(
+        "unknown_reference",
+        "The model referenced counterfactual provenance outside this simulation.",
+      );
+    }
+  }
+  if (
+    counterfactual &&
+    (draft.conclusionType === "supported" || draft.conclusionType === "likely") &&
+    !draft.counterfactualReferences?.length
+  ) {
+    throw new AiOutputError(
+      "unknown_reference",
+      "A supported counterfactual explanation must cite a change or assumption ID.",
+    );
   }
   for (const id of [
     ...draft.graphInstructions.emphasizeStageIds,

@@ -1,4 +1,8 @@
-import type { AiCategory, AiExpertiseMode } from "../../features/investigation/aiSchema";
+import type {
+  AiCategory,
+  AiExpertiseMode,
+  CounterfactualAiContext,
+} from "../../features/investigation/aiSchema";
 import type { EvidenceItem, Investigation } from "../../features/investigation/schema";
 
 export type InvestigationIntent =
@@ -59,6 +63,7 @@ export interface InvestigationEvidenceContext {
   evidence: SelectedAiEvidence[];
   omission: EvidenceOmissionSummary;
   serialized: string;
+  counterfactual?: CounterfactualAiContext;
 }
 
 export interface AiToolCall {
