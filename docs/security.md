@@ -64,3 +64,9 @@ The model receives a bounded copy of the submitted investigation, not authority 
 Layer 6 has no server-side investigation store or signing key. A malicious client can submit a schema-valid fabricated investigation, so diagnosis is not evidence provenance. Gateway account logging/retention is an operator responsibility. See [ai-trust-boundary.md](./ai-trust-boundary.md).
 
 Queues were not introduced because the bounded synchronous browser flow fits the current endpoint contract. If production evidence later requires queued retries, they must be bounded and idempotent. Organization audit trails and durable access permissions remain unimplemented.
+
+## Counterfactual execution boundary
+
+Layer 7 simulations are pure synchronous transformations over already validated local JSON. The fixed registry accepts only eight strict discriminated scenario schemas; there is no expression language, dynamic module loading, arbitrary URL, target fetch, Worker endpoint, browser launch, binding access, storage write, or server-side execution. Targets must already exist and meet rule-specific evidence prerequisites. Source JSON is snapshotted and checked after execution to detect mutation.
+
+Scenario text is bounded and React-rendered as text. Export is generated client-side, capped at 512 KB, omits large artifacts, and creates no server object. Five-item history is memory-only. Failure-introduction scenarios require explicit confirmation. Optional AI explanation occurs after validation through the existing read-only evidence boundary; AI cannot modify parameters, engine rules, metrics, or topology.

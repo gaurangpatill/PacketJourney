@@ -2,7 +2,7 @@
 
 Packet Journey is an AI-assisted network investigation environment that reconstructs, visualizes, and diagnoses the path from a URL to a rendered webpage.
 
-Layers 1–6 are complete: the production-shaped graph and deterministic Cloudflare investigation pipeline now support a constrained, evidence-grounded Workers AI investigator routed through AI Gateway. The model explains collected facts; it does not collect or replace them.
+Layers 1–7 are complete: the Cloudflare investigation pipeline, evidence-grounded AI investigator, and deterministic counterfactual debugger now support measured journeys and explicitly simulated comparisons. AI explains evidence; it does not collect facts or calculate simulations.
 
 ![Packet Journey browser-enabled journey](./docs/assets/browser-journey.png)
 
@@ -29,6 +29,7 @@ Layers 1–6 are complete: the production-shaped graph and deterministic Cloudfl
 - Deliberate loading, empty, invalid URL, blocked destination, missing investigation, TLS failure, and mobile states.
 - A compact one-question AI investigator with deterministic suggestions, strict structured output, cited evidence navigation, explicit uncertainty, prioritized actions, graph emphasis, cancellation, and clear fixture/model labels.
 - Beginner, Developer, and Network Engineer AI depth over the same evidence, with deterministic findings preserved as the authoritative rule output.
+- Eight registered counterfactual rules with side-by-side observed/simulated graphs, metric provenance, explicit assumptions, synchronized controls, bounded in-memory history, and JSON export.
 
 The seven seeded demonstrations remain stable recorded examples. Live workspaces are labeled **Live network evidence** and contain only facts returned by deterministic tools or limited, explicitly labeled inferences with provenance.
 
@@ -60,6 +61,9 @@ flowchart LR
     AI <--> T[Restricted read-only tools]
     AI --> V[Validated evidence-linked diagnosis]
     V --> UI
+    M --> CF[Pure deterministic counterfactual rules]
+    CF --> CMP[Observed vs simulated comparison]
+    CMP --> UI
     DEMO[Recorded examples] --> UI
 ```
 
@@ -67,7 +71,7 @@ The React client and Worker share strict TypeScript and Zod runtime contracts. W
 
 ## Request lifecycle
 
-The deterministic lifecycle remains intake → normalization → DNS/public-address policy → certificate evidence → manual redirects → HTTP evidence → isolated Browser Run → private R2 screenshot → deterministic findings → canonical validation. A separate diagnosis request performs question validation → evidence selection → optional restricted tool planning → Workers AI through AI Gateway → full output/reference validation → assistant panel and graph emphasis. AI failure never removes deterministic functionality.
+The deterministic lifecycle remains intake → normalization → DNS/public-address policy → certificate evidence → manual redirects → HTTP evidence → isolated Browser Run → private R2 screenshot → deterministic findings → canonical validation. A separate diagnosis request interprets bounded evidence. Counterfactuals run afterward as pure client-side transformations of an immutable investigation; they perform no network request and label every derived value `SIMULATED · NOT MEASURED`.
 
 ## Local development
 
@@ -157,6 +161,7 @@ Client URL validation is only a usability guard. The Worker independently reject
 - Defer Queues until measured production latency demonstrates that the bounded synchronous browser contract is unsuitable.
 - Keep model IDs in one registry, cap context well below the documented window, skip Gateway caching, and runtime-validate every model claim/reference before rendering.
 - Return an evidence-guarded inconclusive answer without inference when the selected investigation has no relevant evidence.
+- Keep counterfactual execution in a fixed, versioned TypeScript rule registry; reject arbitrary expressions and mark unsupported downstream metrics unavailable.
 
 ## Known limitations
 
@@ -170,14 +175,14 @@ Client URL validation is only a usability guard. The Worker independently reject
 - Screenshot links are opaque and short-lived but unauthenticated until the later identity layer; treat them as bearer links.
 - AI output can still be semantically imperfect despite structural/reference validation; the UI exposes confidence and uncertainty rather than presenting it as fact.
 - Layer 6 validates submitted canonical payload shape, not server provenance; persistence/signatures do not exist.
-- Vectorize/AI Search retrieval, simulations, persistence, sharing, export, authentication, and organization controls are not active.
-- No D1, Durable Objects, Queues, Vectorize, persistence, collaboration, or counterfactual debugging exists yet.
+- Vectorize/AI Search retrieval, persisted investigations, shareable reports, authentication, and organization controls are not active. Counterfactual JSON export is client-generated and excludes large artifacts.
+- No D1, Durable Objects, Queues, Vectorize, persistence, or collaboration exists yet.
 - Layout is optimized for directed acyclic request journeys. Defensive cyclic input rendering exists, but cycle-specific routing is not a Layer 2 feature.
 - Very large graphs are fit as an overview and may require user zoom; semantic clustering is deferred until real browser traces establish its rules.
 
 ## Roadmap
 
-Layer 6 is complete. Layer 7 has not started; retrieval or another capability must be justified by evaluation evidence before adding services. The remaining milestones are tracked in [the implementation plan](./docs/implementation-plan.md).
+Layer 7 is complete. Layer 8 should begin with D1-backed investigation history and shareable reports; Durable Objects remain deferred until a concrete real-time coordination requirement exists. The remaining milestones are tracked in [the implementation plan](./docs/implementation-plan.md).
 
 ## Architecture and planning
 
@@ -191,6 +196,9 @@ Layer 6 is complete. Layer 7 has not started; retrieval or another capability mu
 - [AI evaluation](./docs/ai-evaluation.md)
 - [Data model](./docs/data-model.md)
 - [Counterfactual engine](./docs/counterfactual-engine.md)
+- [Counterfactual debugging contract](./docs/counterfactual-debugging.md)
+- [Counterfactual rules](./docs/counterfactual-rules.md)
+- [Counterfactual evaluation](./docs/counterfactual-evaluation.md)
 - [Journey visualization](./docs/journey-visualization.md)
 - [HTTP diagnostics](./docs/http-diagnostics.md)
 - [Cloudflare runtime](./docs/cloudflare-runtime.md)

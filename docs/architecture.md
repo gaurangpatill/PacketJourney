@@ -13,6 +13,27 @@ Packet Journey separates collection, interpretation, and presentation.
 9. The React client renders the same model as a graph, timeline, evidence inspector, screenshot panel, waterfall, and findings. Recorded examples enter at this same boundary but remain visibly labeled.
 10. A separate diagnosis endpoint validates a submitted canonical investigation, selects bounded evidence, optionally executes approved read-only views, and sends structured requests through the Workers AI binding and AI Gateway.
 11. Cross-reference validation rejects invented evidence, findings, stages, graph mutations, and overconfident unsupported conclusions before the assistant panel receives output.
+12. A pure client-side counterfactual registry clones one validated observed investigation, applies exactly one fixed rule, validates provenance and immutability, and returns a separately labeled simulated investigation plus changes, assumptions, and metric decisions.
+13. The comparison workspace adapts both investigations independently into the existing graph/layout boundary; no simulation coordinate or UI state enters the canonical schema.
+
+## Layer 7 counterfactual boundary
+
+```mermaid
+flowchart LR
+    I[Validated observed Investigation] --> S[Evidence-based suggestions]
+    S --> C[Explicit structured user confirmation]
+    C --> R[Fixed versioned rule registry]
+    R --> V[Schema + provenance + immutability validation]
+    V --> O[Observed Investigation unchanged]
+    V --> M[SIMULATED · NOT MEASURED Investigation]
+    O --> G1[Graph adapter]
+    M --> G2[Graph adapter]
+    G1 --> UI[Side-by-side comparison]
+    G2 --> UI
+    V --> X[Bounded JSON export]
+```
+
+The engine lives in shared pure TypeScript and runs in the browser for Layer 7. It has no Worker route, fetch capability, expression evaluator, R2 access, or persistence. Histories are limited to five results in component memory. The optional AI panel receives only a completed canonical simulation; it cannot choose or execute a rule.
 
 ## Layer 5 runtime boundary
 

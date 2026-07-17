@@ -68,8 +68,8 @@ In Layer 1, the orchestrator boundary is represented by seeded mock investigatio
 - [x] Layer 4 — DNS and TLS investigation
 - [x] Layer 5 — Browser investigation
 - [x] Layer 6 — Evidence-grounded AI investigation
-- [ ] Layer 7 — Retrieval and next investigation capability (not started)
-- [ ] Layer 8 — Counterfactual debugging
+- [x] Layer 7 — Deterministic counterfactual debugging
+- [ ] Layer 8 — D1-backed investigation history and shareable reports
 - [ ] Layer 9 — Persistence and collaboration
 - [ ] Layer 10 — Production polish and deployment
 
@@ -86,6 +86,7 @@ In Layer 1, the orchestrator boundary is represented by seeded mock investigatio
 | Live state         | Durable Object per active investigation    | Validate pricing and hibernation behavior in Layer 9.                         |
 | Browser jobs       | Bounded synchronous Browser Run session    | Add Queues only after measured latency or retry behavior requires async work. |
 | AI                 | Workers AI through AI Gateway, strict JSON | Runtime validation and evidence abstention implemented in Layer 6.            |
+| Counterfactuals    | Shared pure TypeScript deterministic rules | Keep simulations local; add no Worker endpoint or persistence in Layer 7.     |
 
 ## Layer 3 implementation plan
 
@@ -221,6 +222,36 @@ Validated runtime decisions:
 - JSON Mode is only a generation hint. Cloudflare does not guarantee schema compliance, so strict runtime and cross-reference validation remains the product boundary.
 - A compact summary plus selected detail is capped at 18,000 serialized characters, leaving ample model context for policy, tools, and output. Omitted evidence is counted and explained rather than cut mid-JSON.
 - Development fixture output is dependency-injected or explicitly gated to non-production environments and visibly labeled. Missing AI remains an ordinary unavailable assistant state; deterministic investigation functionality is unchanged.
+
+## Layer 7 implementation plan
+
+Objective: derive a clearly labeled, immutable simulated investigation from one completed observed investigation through a runtime-validated registry of eight narrow, versioned deterministic scenarios. The engine recalculates only explicitly supported values, records rule/evidence/assumption provenance, marks unsupported metrics unavailable, and never performs network, browser, R2, model, or arbitrary-code work. D1, Durable Objects, Queues, retrieval, identity, persistence, and collaboration remain out of scope.
+
+Likely files:
+
+- `src/features/counterfactual/` for shared schemas, registry, immutable engine, metric policy, scenario rules, suggestions, comparison adapter, export, evaluation fixtures, and focused tests.
+- `src/features/investigation/schema.ts` for minimal optional simulation metadata on investigations, stages, evidence, and findings; observed data remains schema compatible.
+- `src/features/counterfactual/CounterfactualWorkspace.tsx` and focused CSS/component tests for structured scenario inputs, bounded in-session history, observed/simulated comparison, selection, assumptions, metric states, reset, and JSON export.
+- Existing graph/canvas presentation for validated simulation badges and changed/unreachable styling only; transformation logic remains outside rendering.
+- Existing AI documentation/boundary for optional explanation over completed result data; AI cannot execute or mutate a scenario.
+- README plus architecture, security, pipeline, data-model, rules, evaluation, and future-persistence documentation.
+
+Acceptance criteria:
+
+- The original investigation serializes identically before and after every simulation. A scenario is runtime validated, dispatched only through the fixed registry, and produces stable output for the same inputs with an engine/rule version.
+- Remove redirects, enable edge cache, reduce origin duration, reduce JavaScript bytes, remove one third-party group, resolve one critical failure, expire a certificate, and remove DNS addresses all enforce narrow eligibility and input bounds.
+- Every modified/added/removed/unreachable value has a change record, rule ID, and source evidence IDs. Simulated evidence/findings/stages carry permanent `SIMULATED / NOT MEASURED` metadata and validate against the canonical model.
+- Every important metric is classified as recalculated, unchanged, or unavailable. Browser paint/execution/user experience is never guessed from transfer or network arithmetic.
+- A pure comparison adapter derives observed/simulated graphs and change maps. The responsive workspace supports synchronized selection, visible change language, assumptions, unavailable metrics, five-item session-only history, duplicate suppression, reset, and bounded JSON export.
+- Suggested scenarios are deterministic. Optional AI explanation consumes the completed deterministic result only; it has no simulation tool or mutation path and cannot create numbers, assumptions, nodes, changes, or findings.
+- Formatting, strict TypeScript, zero-warning ESLint, all Layer 1–6 tests, counterfactual unit/evaluation/component tests, frontend/Worker builds, dependency audit, credential-free Worker/combined smokes, JSON export smoke, visual desktop/mobile checks, and repository hygiene pass.
+
+Validated design decisions:
+
+- Run the engine in a shared frontend-safe TypeScript module. The complete validated investigation already exists client-side, no secret/binding is needed, and a Worker endpoint would add latency and false authority without changing deterministic trust.
+- Add optional domain-level simulation metadata rather than visualization-library fields. The graph remains derived; observed fixtures/live responses require no migration.
+- Store at most five results in component memory. Do not use localStorage, D1, or Durable Objects.
+- Layer 8 should prioritize D1-backed investigation history and shareable reports. Durable Objects remain deferred until a concrete live-coordination requirement exists.
 
 ## Risks and runtime limitations
 
@@ -447,3 +478,32 @@ Known limitations:
 - AI Gateway retention/logging follows account configuration; application logs deliberately omit full user/model content.
 - Real Workers AI and Gateway smoke requires valid Cloudflare account access. Local deterministic fixtures are explicit and do not simulate Gateway observability.
 - Vectorize/AI Search, D1, Durable Objects, Queues, authentication, persistence, collaboration, organizations, and counterfactual debugging remain unimplemented. Layer 7 has not started.
+
+### Layer 7 — Deterministic counterfactual debugging (complete, 2026-07-17)
+
+Implemented:
+
+- Strict runtime schemas for eight narrow scenarios, immutable observed/simulated results, versioned rule/change/assumption provenance, permanent simulation metadata, and explicit recalculated/unchanged/unavailable metric policy.
+- A fixed pure TypeScript registry for redirect removal, edge-cached HTML, origin-duration reduction, JavaScript transfer reduction, third-party-group removal, critical-resource recovery, certificate expiry, and DNS-address removal.
+- Deterministic evidence-based suggestions, source/evidence reference checks, stable output for identical input, simulated finding separation, resolved observed findings, and failure termination with unreachable downstream context.
+- Structured scenario controls with explicit failure confirmation, side-by-side graph/timeline comparison, synchronized selection/playback controls, non-color node states, evidence comparison, assumptions, metric decisions, simulated findings, five-result memory-only history, duplicate suppression, reset, and bounded JSON export.
+- Optional post-simulation AI explanation through the existing guarded diagnosis surface. The AI receives only the completed simulated investigation and has no scenario, rule, arithmetic, or mutation tool.
+- Architecture, schema, security, rule catalog, engine contract, evaluation matrix, Layer 8 persistence direction, and README updates.
+
+Validation:
+
+- `npm run format`, strict `npm run typecheck`, and zero-warning `npm run lint` — passed.
+- `npm run test` — 261 tests passed across 43 files, including all Layer 1–6 regressions and all eight scenarios.
+- `npm run build:web` — passed; 436.54 kB JavaScript / 126.92 kB gzip and 59.20 kB CSS / 11.77 kB gzip.
+- `npm run build:worker` — passed; 3,877.90 KiB upload / 772.78 KiB gzip and existing Browser Run, R2, Workers AI, and Rate Limiting bindings recognized. Layer 7 added no Worker binding or endpoint.
+- `npm audit --audit-level=low` — zero vulnerabilities.
+- Credential-free Worker smoke — `/health` returned 200; combined Vite/Worker smoke returned the SPA route and preserved the proxied structured 403 for a loopback investigation.
+- Headless Chrome review — 1440 px and 500 px observed workspaces plus a completed 1440 px edge-cache comparison checked for responsive controls, labels, graphs, metric policies, assumptions, findings, and no obvious overflow.
+- Deterministic fixture evaluation checked source immutability, identical-input stability, missing-value preservation, unsupported paint timing, simulated failure termination, and canonical result validation without public Internet or AI.
+
+Known limitations:
+
+- Simulations are bounded comparative models, not measurements or complete browser/network emulators. They intentionally leave downstream paint, execution, response, and resolver behavior unavailable where a fixed rule cannot prove it.
+- History is five-item component memory and export is local JSON. Reload persistence, ownership, server provenance, and shareable report URLs do not exist.
+- The optional AI panel sees canonical simulated evidence but does not receive authority over engine changes or assumptions; its availability still depends on the existing Workers AI configuration.
+- Layer 8 has not started. D1, Durable Objects, Queues, Vectorize/AI Search, authentication, organizations, persisted investigations, shareable reports, and live collaboration remain unimplemented. Layer 8 should begin with D1 history and report sharing; Durable Objects remain deferred until real-time coordination is justified.

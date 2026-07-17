@@ -82,6 +82,10 @@ Stage IDs and evidence IDs must be unique. Connections must reference an existin
 
 The `branch` field remains a semantic grouping hint for parallel work, not a coordinate or visualization-library lane ID. Real diagnostics may omit it; investigation order and topology provide stable fallbacks.
 
-Simulated evidence will use a separate simulation marker and will never overwrite collected evidence. AI-generated explanations remain conclusions even when they cite verified evidence.
+Layer 7 adds optional `simulation` metadata to investigations, stages, evidence, and findings. The literal label is `SIMULATED · NOT MEASURED`; stage state is `added`, `modified`, `unchanged`, or `unreachable`. Observed Layer 1–6 payloads remain schema compatible and are never mutated.
+
+`CounterfactualScenario` is a strict discriminated union for eight registered transformations. `CounterfactualResult` contains the immutable observed investigation, a separately validated simulated investigation, rule/version metadata, field-level changes, assumptions, resolved deterministic finding IDs, simulated findings, and one decision for each supported metric: `recalculated`, `unchanged`, or `unavailable`. Unsupported metrics are absent from simulated canonical metrics rather than fabricated.
+
+Changes reference source evidence IDs where a rule relies on observation. Simulated evidence is inferred and names the deterministic rule as its source. Simulated findings carry simulation metadata and cannot masquerade as observed findings. Export is a bounded projection with source identifiers, parameters, changes, assumptions, metric decisions, findings, and compact topology; it excludes screenshot bytes and full artifacts.
 
 For live results, raw resolver records, peer/CT fields, HTTP status/header/location observations, and browser event/Performance API values are `verified` relative to their named source. Parsed cache dispositions, hostname coverage, alias chains, address classifications, registrable-domain party classification, and vendor/intermediary categories are `inferred`. Findings remain conclusions even when confidence is 1.0; every finding references existing evidence IDs and the schema rejects dangling references.
