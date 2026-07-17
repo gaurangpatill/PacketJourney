@@ -2,7 +2,7 @@ import { AlertTriangle, Check, GitBranch, Info, PanelRight, ShieldCheck } from "
 import type { EvidenceItem, ExpertiseMode } from "../investigation/schema";
 import { StageIcon } from "../investigation/StageIcon";
 import type { GraphEdge, GraphNode, InvestigationGraph } from "./graph";
-import { nodeDescription } from "./presentation";
+import { nodeDescription, visibleEvidenceItems } from "./presentation";
 
 function valueText(value: unknown) {
   if (typeof value === "string" || typeof value === "number" || typeof value === "boolean")
@@ -34,8 +34,9 @@ function EvidenceDetail({ item, expertise }: { item: EvidenceItem; expertise: Ex
 }
 
 function NodeInspector({ node, expertise }: { node: GraphNode; expertise: ExpertiseMode }) {
-  const verified = node.stage.evidence.filter((item) => item.confidence === "verified");
-  const inferred = node.stage.evidence.filter((item) => item.confidence === "inferred");
+  const visibleEvidence = visibleEvidenceItems(node.stage.evidence, expertise);
+  const verified = visibleEvidence.filter((item) => item.confidence === "verified");
+  const inferred = visibleEvidence.filter((item) => item.confidence === "inferred");
   return (
     <>
       <div className="inspector-summary">

@@ -1,4 +1,4 @@
-import type { ExpertiseMode, JourneyStage } from "../investigation/schema";
+import type { EvidenceItem, ExpertiseMode, JourneyStage } from "../investigation/schema";
 
 const beginnerTitles: Partial<Record<JourneyStage["type"], string>> = {
   input: "Your browser",
@@ -54,4 +54,18 @@ export function accessibleNodeLabel(stage: JourneyStage, expertise: ExpertiseMod
   const title =
     visibleTitle === stage.title ? stage.title : `${stage.title}, shown as ${visibleTitle}`;
   return `${title}. ${stage.status} stage. ${duration}. ${stage.evidence.length} evidence items.`;
+}
+
+export function visibleEvidenceItems(
+  evidence: EvidenceItem[],
+  expertise: ExpertiseMode,
+): EvidenceItem[] {
+  if (expertise === "engineer") return evidence;
+  if (expertise === "developer") {
+    return evidence.filter(
+      (item) => !/resolver query metadata|fetch tls metadata/i.test(item.label),
+    );
+  }
+  const summaries = evidence.filter((item) => /summary|error|status$/i.test(item.label));
+  return summaries.length > 0 ? summaries.slice(0, 3) : evidence.slice(0, 2);
 }
