@@ -171,10 +171,13 @@ async function main() {
   process.stdout.write(
     `${JSON.stringify({ ...report, chunkHashes: `${report.chunkHashes.length} hashes recorded in .reference-build/report.json` }, null, 2)}\n`,
   );
-  if (failures.length) throw new Error(`${failures.length} allowlisted reference source(s) failed.`);
+  if (failures.length)
+    throw new Error(`${failures.length} allowlisted reference source(s) failed.`);
 }
 
 void main().catch((error: unknown) => {
-  process.stderr.write(`${error instanceof Error ? error.message : "Reference ingestion failed."}\n`);
+  process.stderr.write(
+    `${error instanceof Error ? error.message : "Reference ingestion failed."}\n`,
+  );
   process.exitCode = 1;
 });
