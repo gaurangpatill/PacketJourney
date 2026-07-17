@@ -1,0 +1,20 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "packet-journey-api",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2026-07-16",
+  "observability": {
+    "enabled": true,
+  },
+  "vars": {
+    "ENVIRONMENT": "production",
+  },
+  "env": {
+    "preview": {
+      "name": "packet-journey-api-preview",
+      "vars": {
+        "ENVIRONMENT": "preview",
+      },
+    },
+  },
+}

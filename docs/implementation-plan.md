@@ -19,10 +19,11 @@ PacketJourney/
 │   ├── lib/                    # Cross-cutting utilities and validation
 │   ├── styles/                 # Design tokens and global styles
 │   └── test/                   # Test setup and shared test utilities
-├── worker/                     # Layer 3+ Cloudflare Worker entry and services
-│   ├── diagnostics/            # Small deterministic diagnostic tools
-│   ├── persistence/            # D1, R2, Durable Object adapters
-│   └── security/               # SSRF, limits, audit logging
+│   ├── worker/                 # Layer 3+ Cloudflare Worker entry and services
+│   │   ├── diagnostics/        # Small deterministic HTTP diagnostic tools
+│   │   ├── findings/           # Evidence-linked deterministic rules
+│   │   ├── adapters/           # Diagnostic results to shared investigation schema
+│   │   └── security/           # URL, IP, redirect, timeout, and SSRF policy
 ├── packages/
 │   ├── investigation-schema/   # Shared runtime schemas and TypeScript types
 │   └── simulation/             # Layer 8 deterministic simulation engine
@@ -63,7 +64,7 @@ In Layer 1, the orchestrator boundary is represented by seeded mock investigatio
 
 - [x] Layer 1 — Product foundation
 - [x] Layer 2 — Adaptive journey visualization
-- [ ] Layer 3 — Deterministic HTTP investigation and SSRF-safe fetch
+- [ ] Layer 3 — Deterministic HTTP investigation and SSRF-safe fetch (in progress)
 - [ ] Layer 4 — DNS and TLS investigation
 - [ ] Layer 5 — Browser investigation
 - [ ] Layer 6 — Deterministic findings engine
@@ -85,6 +86,38 @@ In Layer 1, the orchestrator boundary is represented by seeded mock investigatio
 | Live state         | Durable Object per active investigation    | Validate pricing and hibernation behavior in Layer 9.                         |
 | Browser jobs       | Browser Rendering via Queue                | Validate account limits and API availability in Layer 5.                      |
 | AI                 | Workers AI through AI Gateway, strict JSON | Validate chosen model's structured-output reliability in Layer 7.             |
+
+## Layer 3 implementation plan
+
+Objective: replace only the ad-hoc live URL fixture path with a versioned Cloudflare Worker API that returns verified HTTP evidence, cautious deterministic findings, and partial failure journeys through the existing canonical `Investigation` contract. Seeded examples remain recorded and unchanged. DNS/TLS inspection, browser execution, persistence, streaming state, and AI remain out of scope.
+
+Likely files:
+
+- `src/worker/index.ts`, `router.ts`, `env.ts`, `errors.ts`, and `logging.ts` for the Worker boundary.
+- `src/worker/security/` for canonical URL normalization, IP classification, DNS-over-HTTPS preflight checks, and per-redirect SSRF enforcement.
+- `src/worker/diagnostics/` for bounded manual redirects, fixed-header minimal GET requests, header allowlisting, timings, cache analysis, security-header checks, and infrastructure clues.
+- `src/worker/findings/` and `src/worker/adapters/` for evidence-linked findings and canonical investigation output.
+- `src/features/investigation/api.ts` and the existing URL workspace route for explicit live loading, errors, retry, and recorded/live labeling.
+- `wrangler.jsonc`, TypeScript/project scripts, fixtures, and focused unit/integration tests.
+- `README.md` and Layer 3 architecture, pipeline, security, runtime, and data-model documentation.
+
+Acceptance criteria:
+
+- `POST /api/v1/investigations/http` validates request and response bodies at runtime and returns no stack traces.
+- Only canonical public HTTP(S) targets are accepted; credentials, internal names, disallowed IP ranges, unsafe DNS answers, and unsafe redirect destinations fail closed.
+- Every redirect is fetched manually and recorded with status, destination, allowlisted headers, duration, and validation result; loops, missing locations, excess hops, timeouts, and blocked redirects preserve completed evidence.
+- Final results include only observable status, URL, allowlisted headers, hop/overall timing, deterministic cache/security analysis, cautious infrastructure clues, and evidence-linked findings.
+- The Worker emits the canonical investigation schema without graph coordinates or visualization-library types; the existing graph adapter renders live results unchanged.
+- The frontend never silently replaces a failed live request with fixtures and keeps all seven recorded demos available and visibly labeled.
+- Formatting, strict TypeScript, zero-warning ESLint, unit/integration/component tests, frontend and Worker production builds, dependency audit, Worker smoke test, and combined development smoke test pass.
+
+Runtime decisions and limits to validate:
+
+- Use an ES-module Worker and the current `wrangler.jsonc` configuration format with separate local/preview/production variables.
+- Use `redirect: "manual"`, a fixed safe request header set, per-hop abort timeouts, a bounded overall investigation, and immediate response-body cancellation after headers arrive.
+- Use Cloudflare's fixed DNS-over-HTTPS endpoint as a defensive preflight for hostname A/AAAA answers. This can reject observed private answers but cannot pin the subsequent Workers `fetch` connection to those answers, so it reduces rather than eliminates DNS-rebinding risk.
+- Report `performance.now()` durations only around Worker subrequests. DNS, TCP, TLS, origin-only, and browser-render timing are unavailable and must not be synthesized.
+- Keep the redirect and resolver subrequest budget comfortably below the Workers Free plan limit and avoid parallel open connections beyond runtime limits.
 
 ## Risks and runtime limitations
 
