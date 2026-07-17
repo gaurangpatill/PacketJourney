@@ -89,3 +89,17 @@ Layer 7 adds optional `simulation` metadata to investigations, stages, evidence,
 Changes reference source evidence IDs where a rule relies on observation. Simulated evidence is inferred and names the deterministic rule as its source. Simulated findings carry simulation metadata and cannot masquerade as observed findings. Export is a bounded projection with source identifiers, parameters, changes, assumptions, metric decisions, findings, and compact topology; it excludes screenshot bytes and full artifacts.
 
 For live results, raw resolver records, peer/CT fields, HTTP status/header/location observations, and browser event/Performance API values are `verified` relative to their named source. Parsed cache dispositions, hostname coverage, alias chains, address classifications, registrable-domain party classification, and vendor/intermediary categories are `inferred`. Findings remain conclusions even when confidence is 1.0; every finding references existing evidence IDs and the schema rejects dangling references.
+
+## Persisted snapshot model
+
+Layer 8 does not add storage fields to `Investigation`. A persistence adapter produces a separate versioned envelope:
+
+- `investigations` stores ownership, list/filter metadata, finding counts, selected-child flags, canonical JSON, schema version, and a deterministic SHA-256 consistency hash.
+- `ai_diagnoses` stores at most one explicitly selected, already validated diagnosis for a snapshot.
+- `counterfactual_results` stores at most one explicitly selected deterministic result and its source snapshot hash.
+- `share_links` stores only a token hash, inclusion policy, expiry/revocation, and coarse access metadata.
+- `investigation_artifacts` maps an authorized saved investigation to an opaque private R2 key and retention metadata.
+
+The persisted schema version is currently `1`. Serialization sorts object keys recursively and strips transient artifact URLs. Reads validate the version, parse the canonical runtime schema, and verify the stored hash before returning data. A duplicate exact snapshot is permitted as a distinct user-named entry and is surfaced as a warning rather than silently overwriting history.
+
+Owner detail and public share responses are dedicated runtime-validated projections. The public projection contains no owner ID, D1 row, token hash, raw R2 key, or internal cleanup metadata. It labels evidence as a saved snapshot, exposes capture time/freshness, and does not imply that opening it reran network diagnostics.

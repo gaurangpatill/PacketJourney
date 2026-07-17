@@ -69,8 +69,8 @@ In Layer 1, the orchestrator boundary is represented by seeded mock investigatio
 - [x] Layer 5 — Browser investigation
 - [x] Layer 6 — Evidence-grounded AI investigation
 - [x] Layer 7 — Deterministic counterfactual debugging
-- [ ] Layer 8 — D1-backed investigation history and shareable reports
-- [ ] Layer 9 — Persistence and collaboration
+- [x] Layer 8 — D1-backed investigation history and shareable reports
+- [ ] Layer 9 — Live coordination and production expansion
 - [ ] Layer 10 — Production polish and deployment
 
 ## Initial decisions to validate
@@ -83,10 +83,10 @@ In Layer 1, the orchestrator boundary is represented by seeded mock investigatio
 | Visualization      | Accessible custom SVG in Layer 2           | Benchmark complex third-party graphs before rejecting React Flow.             |
 | Runtime validation | Zod schemas shared by UI and Worker        | Validate Worker bundle size in Layer 3.                                       |
 | Backend            | Cloudflare Worker with small typed tools   | Validate local Worker runtime and outbound API constraints in Layer 3.        |
-| Live state         | Durable Object per active investigation    | Validate pricing and hibernation behavior in Layer 9.                         |
+| Live state         | Request/response; no Durable Object        | Add coordination only when a concrete multi-viewer requirement exists.        |
 | Browser jobs       | Bounded synchronous Browser Run session    | Add Queues only after measured latency or retry behavior requires async work. |
 | AI                 | Workers AI through AI Gateway, strict JSON | Runtime validation and evidence abstention implemented in Layer 6.            |
-| Counterfactuals    | Shared pure TypeScript deterministic rules | Keep simulations local; add no Worker endpoint or persistence in Layer 7.     |
+| Counterfactuals    | Shared pure TypeScript deterministic rules | Engine stays local; Layer 8 can persist one explicitly selected result.       |
 
 ## Layer 3 implementation plan
 
@@ -253,9 +253,42 @@ Validated design decisions:
 - Store at most five results in component memory. Do not use localStorage, D1, or Durable Objects.
 - Layer 8 should prioritize D1-backed investigation history and shareable reports. Durable Objects remain deferred until a concrete live-coordination requirement exists.
 
+## Layer 8 implementation plan
+
+Objective: persist explicit, bounded investigation snapshots in D1 and expose owner-scoped history plus cryptographically opaque, revocable, read-only report links. Existing live evidence, R2 privacy, AI validation, counterfactual provenance, and SSRF boundaries remain authoritative. No Durable Objects, Queues, retrieval, accounts, organizations, or collaboration are introduced.
+
+Likely files:
+
+- `migrations/0001_persistence.sql`, Wrangler D1 bindings, and package scripts for immutable local/preview/production migration workflows.
+- `src/features/persistence/` for runtime API, summary, saved-record, shared-projection, ownership-neutral, and UI contracts.
+- `src/worker/persistence/` for anonymous-cookie identity, stable serialization/hashing, prepared D1 repositories, share tokens, R2 promotion/retrieval/deletion, projections, limits, error mapping, and route orchestration.
+- Worker router/environment/CORS for owner CRUD, shares, public projection, and controlled artifact routes.
+- Investigation workspace state for explicit selection of the current AI diagnosis and counterfactual result, save dialog, saved history, saved workspace, and shared report routes.
+- README and architecture/security/pipeline/data-model/artifact/AI/counterfactual documentation.
+
+Acceptance criteria:
+
+- Migration 0001 applies to an empty local D1 database, enforces foreign keys/cascades, and creates indexes for owner history, hostname search, duplicate hashes, share resolution, and artifacts. All runtime SQL is static prepared/bound input.
+- The server—not request JSON—issues a 256-bit anonymous installation cookie and stores only its SHA-256 owner representation. Every owner route applies it and returns neutral not-found behavior across owners.
+- Snapshot schema version 1 validates before/after storage, strips temporary artifact URLs, stays below 900 KiB, serializes stably, and stores a consistency hash described as corruption/duplicate detection rather than authenticity.
+- Save/list/cursor-open/rename/delete and one selected diagnosis/counterfactual work without altering evidence. Exact duplicate saves remain separate with a warning.
+- Available screenshots promote into a 30-day private saved R2 namespace; failure produces an explicit partial warning. Deletion cascades D1 and cleans exclusive objects, recording cleanup failures for repair.
+- Share tokens use 256-bit Web Crypto entropy, are returned once, stored only as SHA-256, expire/revoke immediately, are rate-limited, and resolve through a dedicated sanitized read-only projection and share-authorized artifact route.
+- History, saved, and shared interfaces clearly distinguish live/recorded/saved/shared state, reuse graph/timeline/inspector presentation, never rerun automatically, support fresh-run navigation, and remain responsive/keyboard/reduced-motion compatible.
+- Formatting, strict types, zero-warning lint, all Layer 1–7 regressions, serialization/repository/share/R2/API/UI/migration tests, builds, audit, local D1/R2/combined smokes, and repository hygiene pass.
+
+Validated design decisions:
+
+- Use a server-issued HttpOnly same-site anonymous cookie rather than trusting a client-supplied owner ID. This is installation continuity, not authentication.
+- Store indexed list/filter fields as columns and canonical/AI/counterfactual payloads as bounded validated JSON; do not normalize individual evidence rows.
+- Save duplicate hashes as separate records while returning a duplicate warning.
+- Promote screenshots before D1 association, roll promoted objects back if the database write fails, and save without screenshot only with an explicit warning when promotion itself fails.
+- Run public shares as projections, never as database-shaped objects. Store only share-token hashes and keep R2 private.
+- D1 is sufficient for request/response persistence. Durable Objects remain deferred until a real synchronized coordination requirement exists.
+
 ## Risks and runtime limitations
 
-- Browser Run, R2, and Workers AI require Cloudflare account features for preview/production, while Wrangler provides local bindings and explicit deterministic AI fixture mode. D1, Queues, Durable Objects, and Vectorize remain later-layer services.
+- Browser Run, R2, Workers AI, and D1 require provisioned Cloudflare account resources for preview/production, while Wrangler provides local bindings and explicit deterministic AI fixture mode. Queues, Durable Objects, and Vectorize/AI Search remain later-layer services.
 - Workers expose constrained outbound sockets, but Cloudflare directs HTTP ports such as 443 through `fetch` and applies destination restrictions. The independent port-443 peer probe therefore degrades to documented Certificate Transparency issuance evidence when direct peer inspection is unavailable; outbound-fetch TLS session details remain unavailable.
 - Recursive DNS APIs may omit authoritative traversal details or per-record TTL behavior. Every field must retain its source and collection time.
 - Browser resource timing can be incomplete because of cross-origin timing restrictions, cached resources, service workers, and browser API limits.
@@ -506,4 +539,35 @@ Known limitations:
 - Simulations are bounded comparative models, not measurements or complete browser/network emulators. They intentionally leave downstream paint, execution, response, and resolver behavior unavailable where a fixed rule cannot prove it.
 - History is five-item component memory and export is local JSON. Reload persistence, ownership, server provenance, and shareable report URLs do not exist.
 - The optional AI panel sees canonical simulated evidence but does not receive authority over engine changes or assumptions; its availability still depends on the existing Workers AI configuration.
-- Layer 8 has not started. D1, Durable Objects, Queues, Vectorize/AI Search, authentication, organizations, persisted investigations, shareable reports, and live collaboration remain unimplemented. Layer 8 should begin with D1 history and report sharing; Durable Objects remain deferred until real-time coordination is justified.
+- Layer 8 is complete. D1-backed history and shareable reports now exist; Durable Objects, Queues, Vectorize/AI Search, full authentication, organizations, and live collaboration remain unimplemented. Layer 9 has not started.
+
+### Layer 8 — D1 investigation history and shareable reports (complete, 2026-07-17)
+
+Implemented:
+
+- Ordered D1 migration with owner-scoped investigations, selected AI/counterfactual children, hash-only share links, private R2 artifact associations, cleanup repair records, foreign-key cascades, and bounded indexes.
+- Server-issued 256-bit HttpOnly installation cookie with hash-only owner identity; all owner SQL uses prepared statements and binds ownership at the database boundary.
+- Snapshot schema version 1 with stable serialization, transient artifact URL removal, 900 KiB bound, deterministic SHA-256 consistency/duplicate hash, selected-child validation, and fail-closed deserialization.
+- Save, paginated/filterable history, open, rename, delete, duplicate warning, fresh-run navigation, and explicit recorded/live/saved/shared labels without automatic diagnostic reruns.
+- Private screenshot promotion into a 30-day `saved-artifacts/` R2 namespace, owner/share authorization, partial preservation warnings, rollback on D1 failure, and cleanup-failure recording.
+- 256-bit opaque share tokens returned once and stored only as SHA-256, configurable bounded expiry/content options, immediate revocation, rate-limited resolution, access metadata, redacted logs, and sanitized read-only projections.
+- Saved/shared workspaces reuse the canonical graph, timeline, inspector, expertise modes, browser evidence, selected diagnosis, and selected simulation. Shared views contain no edit, delete, AI execution, or simulation execution controls.
+- Dedicated persistence, D1 schema, share-link, and retention documentation plus updated architecture, security, data-model, runtime, README, and milestone guidance.
+
+Validation:
+
+- `npm run format`, strict `npm run typecheck`, and zero-warning `npm run lint` — passed.
+- `npm run test` — 291 tests across 54 files, including all Layer 1–7 regressions and new serialization, migration, token, ownership, prepared-query, projection, R2, route, client, and UI coverage.
+- `npm run build:web` and `npm run build:worker` — passed; Wrangler recognized D1, R2, Browser Run, Workers AI, and Rate Limiting bindings.
+- `npm audit --audit-level=high` — zero vulnerabilities.
+- Local migration — `0001_persistence.sql` applied all 14 statements successfully to an empty local D1 database.
+- Local Worker smoke — save 201, list 200, rename 200, share 201, public report 200, revoke 200, revoked report 410, and delete 200 against persistent local Wrangler state. Logs replaced the share token with `:opaque-token`.
+- Preview deployment — `wrangler whoami` confirmed that the available token is expired and cannot refresh non-interactively. Preview D1 IDs/resources are not provisioned in committed configuration, so no preview migration/deployment was attempted or claimed.
+
+Known limitations:
+
+- Anonymous installation ownership is not an account, has no recovery, and does not synchronize across browsers or devices.
+- Public report URLs are revocable bearer capabilities; anyone who obtains an active token can read the selected projection.
+- Snapshot hashes detect consistency changes and duplicates but are not signatures or provenance attestations.
+- D1 stores bounded JSON snapshots rather than evidence-row normalization. R2 lifecycle configuration is still required for physical artifact deletion after application expiry.
+- Layer 9 has not started. Durable Objects, Queues, Vectorize/AI Search, full authentication, organizations, live viewers, and collaboration remain absent.

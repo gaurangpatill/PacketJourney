@@ -15,6 +15,30 @@ Packet Journey separates collection, interpretation, and presentation.
 11. Cross-reference validation rejects invented evidence, findings, stages, graph mutations, and overconfident unsupported conclusions before the assistant panel receives output.
 12. A pure client-side counterfactual registry clones one validated observed investigation, applies exactly one fixed rule, validates provenance and immutability, and returns a separately labeled simulated investigation plus changes, assumptions, and metric decisions.
 13. The comparison workspace adapts both investigations independently into the existing graph/layout boundary; no simulation coordinate or UI state enters the canonical schema.
+14. A separate persistence boundary validates a completed or meaningfully partial canonical investigation, removes transient artifact URLs, serializes it deterministically, hashes it, and stores indexed metadata plus bounded schema-versioned JSON in D1.
+15. Saved browser screenshots are copied from the transient R2 prefix into a private saved-artifact prefix. D1 stores only opaque key metadata and owner/share authorization is checked before every read.
+16. Owner history uses an HttpOnly anonymous-installation cookie whose SHA-256 hash is the D1 owner identifier. Read-only reports use independent 256-bit tokens; only token hashes are persisted.
+
+## Layer 8 persistence boundary
+
+```mermaid
+flowchart LR
+    UI[React workspace] -->|Save canonical snapshot| API[Worker persistence router]
+    API --> O[Anonymous installation cookie]
+    O --> V[Zod + size + relationship validation]
+    V --> S[Stable serialization + SHA-256]
+    S --> D1[(D1 metadata + bounded JSON)]
+    V --> R2[(Private R2 saved artifacts)]
+    D1 --> H[Owner history/detail]
+    D1 --> T[Hashed share token + policy]
+    T --> P[Sanitized read-only projection]
+    R2 -->|authorized owner/share route| H
+    R2 -->|optional authorized screenshot| P
+    H --> UI
+    P --> UI
+```
+
+D1 is the authoritative index and snapshot store, while R2 remains the byte store. The Worker owns authorization, projection, and migration-aware deserialization; the client never receives D1 row shapes, owner hashes, raw R2 keys, or stored token hashes. The saved projection reuses `Investigation` and the existing graph adapter rather than introducing persistence-specific graph types.
 
 ## Layer 7 counterfactual boundary
 
@@ -77,6 +101,6 @@ The SVG canvas owns only viewport interaction. A shared journey controller synch
 
 This separation keeps future Worker responses independent of rendering technology and lets graph generation and layout be tested without a browser. See [journey-visualization.md](./journey-visualization.md).
 
-Cloudflare services are introduced only with a concrete responsibility. Workers provides APIs and orchestration; Browser Run provides isolated Chromium evidence; R2 stores screenshots; Workers AI interprets bounded evidence; AI Gateway supplies inference observability/routing with caching disabled; native Rate Limiting bindings protect diagnostic and AI work. Cloudflare DoH supplies resolver evidence, and SSLMate Cert Spotter remains a narrowly scoped certificate fallback. Queues, Durable Objects, D1, Vectorize, identity, and collaboration remain unimplemented.
+Cloudflare services are introduced only with a concrete responsibility. Workers provides APIs, orchestration, persistence authorization, and public projections; Browser Run provides isolated Chromium evidence; D1 stores indexed history and bounded versioned snapshots; R2 stores screenshots; Workers AI interprets bounded evidence; AI Gateway supplies inference observability/routing with caching disabled; native Rate Limiting bindings protect diagnostic, AI, and public-share work. Cloudflare DoH supplies resolver evidence, and SSLMate Cert Spotter remains a narrowly scoped certificate fallback. Queues, Durable Objects, Vectorize/AI Search, full identity, organizations, and collaboration remain unimplemented.
 
-See [ai-investigation.md](./ai-investigation.md), [ai-trust-boundary.md](./ai-trust-boundary.md), [browser-investigation.md](./browser-investigation.md), [browser-artifacts.md](./browser-artifacts.md), [http-diagnostics.md](./http-diagnostics.md), [dns-tls-diagnostics.md](./dns-tls-diagnostics.md), [cloudflare-runtime.md](./cloudflare-runtime.md), and [implementation-plan.md](./implementation-plan.md).
+See [persistence.md](./persistence.md), [d1-schema.md](./d1-schema.md), [share-links.md](./share-links.md), [data-retention.md](./data-retention.md), [ai-investigation.md](./ai-investigation.md), [ai-trust-boundary.md](./ai-trust-boundary.md), [browser-investigation.md](./browser-investigation.md), [browser-artifacts.md](./browser-artifacts.md), [http-diagnostics.md](./http-diagnostics.md), [dns-tls-diagnostics.md](./dns-tls-diagnostics.md), [cloudflare-runtime.md](./cloudflare-runtime.md), and [implementation-plan.md](./implementation-plan.md).

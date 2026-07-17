@@ -50,3 +50,19 @@ POST /api/v1/investigations/:id/diagnose
 ```
 
 Missing relevant evidence produces an inconclusive evidence-guard response without model inference. AI failure leaves the canonical investigation, deterministic findings, graph, and artifacts intact.
+
+Layer 8 adds an explicit post-investigation persistence pipeline. It does not automatically save live runs or rerun a saved report:
+
+```text
+user selects Save
+  → canonical Investigation + optional selected diagnosis/simulation validation
+  → transient artifact URLs removed
+  → bounded stable serialization + schema version + consistency hash
+  → optional screenshot promotion into private saved R2 namespace
+  → prepared owner-scoped D1 batch
+  → saved workspace/history
+  → optional hash-only share policy
+  → sanitized read-only shared projection
+```
+
+Opening a saved or shared report reads the captured snapshot and passes it through the same canonical graph, timeline, inspector, expertise, browser-evidence, AI-result, and counterfactual-comparison presentation. It does not call DNS, TLS, HTTP, Browser Run, Workers AI, or the simulation engine automatically. “Run a fresh investigation” is the explicit path back into collection.

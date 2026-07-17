@@ -28,4 +28,4 @@ Unavailable fields are removed from the simulated metric object and retained in 
 
 The workspace retains at most five results in React memory, suppresses duplicate scenarios, and clears them on reload. It never uses localStorage. Export is bounded JSON containing IDs, scenario/rule/engine metadata, changes, assumptions, metric decisions, simulated findings, and timestamps. It excludes screenshot bytes, raw R2 keys, hidden configuration, prompts, secrets, and unbounded manifests.
 
-Layer 8 may persist observed investigations and shareable reports in D1. Durable Objects should be introduced only when synchronized viewers or another measured real-time coordination requirement exists.
+Layer 8 can explicitly persist one selected, fully validated result alongside its observed snapshot. It preserves the engine version, source investigation ID/hash, immutable observed/simulated payloads, and deterministic provenance. Saving does not rerun the rule, and public inclusion is controlled per share. Durable Objects should be introduced only when synchronized viewers or another measured real-time coordination requirement exists.

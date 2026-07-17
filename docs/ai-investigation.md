@@ -37,9 +37,10 @@ Beginner, Developer, and Network Engineer modes change prompt depth and presenta
 
 ## Known limitations
 
-- A submitted canonical payload may be fabricated by its client until persistence and signed ownership exist.
+- A submitted canonical payload may be fabricated by its client. Layer 8 persistence validates shape and consistency but does not sign or attest collection provenance.
 - Model output remains probabilistic even after validation; validation prevents dangling references, not every semantic error.
 - JSON Mode does not guarantee schema compliance, so failures are expected and handled.
 - Gateway observability can retain configured request data; production account settings require review.
 - No retrieval is used. Vectorize/AI Search should be considered only when an evaluated question requires external networking documentation; retrieved text must remain untrusted context.
-- D1, Durable Objects, Queues, authentication, persistence, collaboration, organizations, and counterfactual debugging are not implemented.
+- A user can explicitly include one selected validated diagnosis in a saved snapshot. D1 stores the structured diagnosis and version metadata, never system prompts or Gateway logs. Public inclusion is separately controlled per share.
+- Durable Objects, Queues, Vectorize/AI Search, full authentication, collaboration, and organizations are not implemented.

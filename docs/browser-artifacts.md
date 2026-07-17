@@ -26,9 +26,13 @@ The route validates the UUID shape, derives the internal prefix itself, performs
 
 Successful responses set the stored image media type, `X-Content-Type-Options: nosniff`, a sandboxed content security policy, private short caching, a fixed inline filename, length, and ETag. CORS applies only through the existing exact frontend-origin allowlist. Artifact URLs are bearer-style opaque references in Layer 5; authentication and organization authorization remain unimplemented and must be added before screenshots can be considered user-private data.
 
+Layer 8 adds a second read boundary for explicitly saved screenshots. A save copies an available transient object to `saved-artifacts/{saved-investigation-id}/{artifact-id}.image`, records the association in D1, and exposes it only after owner-cookie authorization or resolution of an active share whose policy includes screenshots. Neither route accepts an R2 key. This is installation/share authorization, not full account authentication.
+
 ## Retention and privacy
 
 The Worker enforces a 24-hour access expiry in object metadata. Preview and production buckets should also configure an R2 lifecycle rule that deletes the `browser-screenshots/` prefix after one day, preventing inaccessible bytes from accumulating. Local Wrangler uses simulated R2.
+
+Saved screenshot metadata and reads are bounded to 30 days. Production should apply a matching lifecycle rule to `saved-artifacts/`. Deleting a saved investigation deletes its exclusive saved objects after the D1 cascade; failed object cleanup is logged and recorded for later repair.
 
 Screenshots can contain public-page content visible to an unauthenticated new browser context. Packet Journey never forwards user cookies, credentials, local storage, or authentication. Users should still treat artifact links as sensitive during their lifetime because a public page can reflect URL-path or server-derived information. Display URLs remove query strings and fragments; screenshots themselves necessarily show rendered content and are not logged or committed as test fixtures.
 

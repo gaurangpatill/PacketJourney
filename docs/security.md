@@ -70,3 +70,17 @@ Queues were not introduced because the bounded synchronous browser flow fits the
 Layer 7 simulations are pure synchronous transformations over already validated local JSON. The fixed registry accepts only eight strict discriminated scenario schemas; there is no expression language, dynamic module loading, arbitrary URL, target fetch, Worker endpoint, browser launch, binding access, storage write, or server-side execution. Targets must already exist and meet rule-specific evidence prerequisites. Source JSON is snapshotted and checked after execution to detect mutation.
 
 Scenario text is bounded and React-rendered as text. Export is generated client-side, capped at 512 KB, omits large artifacts, and creates no server object. Five-item history is memory-only. Failure-introduction scenarios require explicit confirmation. Optional AI explanation occurs after validation through the existing read-only evidence boundary; AI cannot modify parameters, engine rules, metrics, or topology.
+
+## Persistence and share boundary
+
+- Owner-scoped endpoints derive a stable owner identifier by hashing a 256-bit HttpOnly, `SameSite=Lax` installation cookie. The raw cookie is never placed in D1, JSON responses, or application logs.
+- This cookie is device-local convenience, not authentication. It provides no identity proof, recovery, cross-device access, organization membership, or protection after a browser profile is compromised.
+- Every owner read, rename, delete, artifact lookup, and share mutation binds both resource ID and owner ID in prepared D1 statements. Missing and cross-owner resources use the same not-found behavior.
+- Share tokens are independent 256-bit base64url bearer secrets. Only SHA-256 hashes are stored. Raw tokens appear only in the creation response and recipient URL; Worker request logs redact the token path segment.
+- Public share resolution is rate limited, validates expiry/revocation, increments coarse access metadata, and returns a dedicated sanitized projection. Query strings and fragments are removed from public HTTP(S) URLs.
+- A share can include a selected saved AI diagnosis, deterministic counterfactual, and saved screenshot only through explicit per-link booleans. Excluded children do not enter the response.
+- Saved screenshots use private R2 keys unrelated to target URLs. Owner and share routes look up the authorized D1 artifact row; there is no raw-key, list, write, or arbitrary-object endpoint.
+- Snapshot and report sizes, row counts, titles, page sizes, active shares, expiry, and artifact retention are bounded. SQL is static and all values use prepared bindings.
+- Deleting a saved investigation cascades D1 children and then attempts R2 cleanup. Failed R2 cleanup is logged and recorded in a repair table without restoring deleted access.
+
+The snapshot consistency hash is not a signature and does not prove provenance. An active share URL is a bearer capability; recipients can forward it. Full account authentication, organization ACLs, audit identity, and collaborative access are deferred.

@@ -2,7 +2,7 @@
 
 Packet Journey is an AI-assisted network investigation environment that reconstructs, visualizes, and diagnoses the path from a URL to a rendered webpage.
 
-Layers 1–7 are complete: the Cloudflare investigation pipeline, evidence-grounded AI investigator, and deterministic counterfactual debugger now support measured journeys and explicitly simulated comparisons. AI explains evidence; it does not collect facts or calculate simulations.
+Layers 1–8 are complete: the Cloudflare investigation pipeline, evidence-grounded AI investigator, deterministic counterfactual debugger, and D1-backed investigation history now support measured journeys, explicitly simulated comparisons, and bounded read-only reports. AI explains evidence; it does not collect facts or calculate simulations.
 
 ![Packet Journey browser-enabled journey](./docs/assets/browser-journey.png)
 
@@ -30,6 +30,9 @@ Layers 1–7 are complete: the Cloudflare investigation pipeline, evidence-groun
 - A compact one-question AI investigator with deterministic suggestions, strict structured output, cited evidence navigation, explicit uncertainty, prioritized actions, graph emphasis, cancellation, and clear fixture/model labels.
 - Beginner, Developer, and Network Engineer AI depth over the same evidence, with deterministic findings preserved as the authoritative rule output.
 - Eight registered counterfactual rules with side-by-side observed/simulated graphs, metric provenance, explicit assumptions, synchronized controls, bounded in-memory history, and JSON export.
+- D1-backed save, history, filtering, pagination, rename, and delete flows for versioned canonical evidence snapshots.
+- Read-only share reports with 256-bit opaque bearer tokens, hash-only token storage, optional expiry/revocation, access metadata, and explicit AI/simulation/screenshot inclusion controls.
+- Saved screenshots promoted into a private R2 namespace with owner/share authorization and a documented 30-day application retention bound.
 
 The seven seeded demonstrations remain stable recorded examples. Live workspaces are labeled **Live network evidence** and contain only facts returned by deterministic tools or limited, explicitly labeled inferences with provenance.
 
@@ -64,10 +67,17 @@ flowchart LR
     M --> CF[Pure deterministic counterfactual rules]
     CF --> CMP[Observed vs simulated comparison]
     CMP --> UI
+    M --> P[D1 versioned snapshot + metadata]
+    P --> HIST[Owner history]
+    P --> SHARE[Read-only share projection]
+    R2 --> SAVED[Private saved-artifact namespace]
+    P --> SAVED
+    HIST --> UI
+    SHARE --> UI
     DEMO[Recorded examples] --> UI
 ```
 
-The React client and Worker share strict TypeScript and Zod runtime contracts. Workers performs bounded diagnostics and AI orchestration, Browser Run collects isolated page evidence, R2 stores screenshot bytes, Workers AI interprets selected evidence, AI Gateway provides model observability/routing, and native Rate Limiting bindings protect network, browser, client-AI, and repeated-payload work. The model has no arbitrary fetch or code tool.
+The React client and Worker share strict TypeScript and Zod runtime contracts. Workers performs bounded diagnostics, AI orchestration, and persistence authorization; Browser Run collects isolated page evidence; D1 stores indexed metadata and bounded versioned JSON snapshots; R2 stores screenshot bytes; Workers AI interprets selected evidence; AI Gateway provides model observability/routing; and native Rate Limiting bindings protect network, browser, AI, and public-share work. The model has no arbitrary fetch or code tool.
 
 ## Request lifecycle
 
@@ -79,10 +89,11 @@ Requirements: Node.js 22+ and npm 10+.
 
 ```bash
 npm install
+npm run db:migrate:local
 npm run dev
 ```
 
-`npm run dev` starts Vite on port 5173 and a credential-free local Worker on port 8787 using `wrangler.local.jsonc`; Vite proxies `/api` to it. The local config deliberately omits the always-remote `AI` binding and enables visibly labeled deterministic fixture output. Use `npm run dev:worker:ai` with fixture mode disabled for the production-shaped AI binding when Wrangler authentication/runtime access is available. No model API key is used.
+`npm run db:migrate:local` applies ordered SQL migrations to the local D1 database. `npm run dev` then starts Vite on port 5173 and a credential-free local Worker on port 8787 using `wrangler.local.jsonc`; Vite proxies `/api` to it. Local D1 and R2 data live in Wrangler's ignored local state. The local config deliberately omits the always-remote `AI` binding and enables visibly labeled deterministic fixture output. Use `npm run dev:worker:ai` with fixture mode disabled for the production-shaped AI binding when Wrangler authentication/runtime access is available. No model API key is used.
 
 Useful split commands:
 
@@ -92,6 +103,7 @@ npm run dev:worker
 npm run dev:worker:ai
 npm run build:web
 npm run build:worker
+npm run db:reset:local
 ```
 
 ## Quality checks
@@ -105,7 +117,7 @@ npm run build
 npm audit
 ```
 
-The deterministic suite covers client and Worker URL handling, SSRF policy, DNS/TLS/HTTP collection, Browser Run lifecycle/cleanup, browser navigation safety, resource classification/bounds, performance and console normalization, R2 storage/retrieval, browser findings, canonical adaptation, API/CORS/error envelopes, graph behavior, accessibility interactions, and recorded journeys. Main tests use mocked responses and do not require public Internet access.
+The deterministic suite covers client and Worker URL handling, SSRF policy, DNS/TLS/HTTP collection, Browser Run lifecycle/cleanup, browser navigation safety, resource classification/bounds, performance and console normalization, R2 storage/retrieval, browser findings, canonical adaptation, API/CORS/error envelopes, graph behavior, accessibility interactions, persisted serialization/integrity, prepared ownership boundaries, token handling, and recorded journeys. Main tests use mocked responses and do not require public Internet access.
 
 ## Deployment
 
@@ -118,7 +130,9 @@ npm run deploy:production
 
 Set `VITE_API_BASE_URL` at frontend build time when the API is on another origin. Configure `CORS_ALLOWED_ORIGINS` on the Worker as a comma-separated exact allowlist for those frontend origins.
 
-Before the first preview/production Worker deployment, create the private R2 buckets named in `wrangler.jsonc` and configure a one-day lifecycle deletion rule for the `browser-screenshots/` prefix. Browser Run must be enabled for the account. Wrangler CLI authentication is deployment tooling; the application never reads a Cloudflare API token.
+Before the first preview/production Worker deployment, create the D1 databases and private R2 buckets named in `wrangler.jsonc`, then record the account-specific D1 database IDs in deployment configuration. Apply `npm run db:migrate:preview` before preview deployment and `npm run db:migrate:production` before production deployment. Configure a one-day R2 lifecycle rule for `browser-screenshots/` and a 30-day rule for `saved-artifacts/`. Browser Run must be enabled for the account. Wrangler CLI authentication is deployment tooling; the application never reads a Cloudflare API token.
+
+Preview deployment is intentionally not automatic from local development. It requires provisioned account resources, valid Wrangler authentication, migrations applied to the preview database, and the account-specific binding IDs.
 
 ## Environment variables
 
@@ -137,7 +151,7 @@ Before the first preview/production Worker deployment, create the private R2 buc
 - `AI_MODEL` — configured model-registry key, default `llama-3.3-70b-fast`.
 - `AI_FALLBACK_MODEL`, `AI_MAX_REQUESTS`, `AI_MAX_TOOL_ROUNDS`, `AI_MAX_INPUT_CHARS`, `AI_MAX_OUTPUT_CHARS`, `AI_MAX_OUTPUT_TOKENS`, `AI_TIMEOUT_MS` — optional bounded AI controls.
 
-`BROWSER`, `BROWSER_ARTIFACTS`, `AI`, and the four Rate Limiting bindings are typed Wrangler bindings, not secrets. No Cloudflare API token or model-provider key is read by application code.
+`DB`, `BROWSER`, `BROWSER_ARTIFACTS`, `AI`, and the Rate Limiting bindings are typed Wrangler bindings, not secrets. No Cloudflare API token or model-provider key is read by application code.
 
 ## Security considerations
 
@@ -172,17 +186,19 @@ Client URL validation is only a usability guard. The Worker independently reject
 - Some targets reject or treat data-center/Worker requests differently from browser traffic.
 - Browser timings are one lab observation, not field performance; cross-origin timing policy and caching can make transfer bytes unavailable.
 - Browser request interception rechecks DNS but cannot pin Chromium's later connection to the checked answer, leaving a documented rebinding gap.
-- Screenshot links are opaque and short-lived but unauthenticated until the later identity layer; treat them as bearer links.
+- Live screenshot links are short-lived bearer references. Saved screenshot routes additionally require the anonymous owner cookie or an active share token with screenshot inclusion enabled.
 - AI output can still be semantically imperfect despite structural/reference validation; the UI exposes confidence and uncertainty rather than presenting it as fact.
-- Layer 6 validates submitted canonical payload shape, not server provenance; persistence/signatures do not exist.
-- Vectorize/AI Search retrieval, persisted investigations, shareable reports, authentication, and organization controls are not active. Counterfactual JSON export is client-generated and excludes large artifacts.
-- No D1, Durable Objects, Queues, Vectorize, persistence, or collaboration exists yet.
+- Snapshot SHA-256 hashes detect unexpected stored-data changes but are not signatures and do not prove that a client-submitted investigation originally came from Packet Journey.
+- Anonymous installation ownership is deliberately not authentication. Clearing cookies or changing browsers loses owner access, and there is no account recovery or cross-device history.
+- Public reports are bearer links. Tokens are high-entropy and stored only as hashes, but anyone who receives a live link can read its bounded projection until it expires or is revoked.
+- D1 has bounded snapshot/output limits; large screenshot bytes remain in R2. Saved artifact expiry is enforced on reads, while bucket lifecycle rules provide physical deletion.
+- Durable Objects, Queues, Vectorize/AI Search, full authentication, organizations, live viewers, and collaborative editing remain unimplemented.
 - Layout is optimized for directed acyclic request journeys. Defensive cyclic input rendering exists, but cycle-specific routing is not a Layer 2 feature.
 - Very large graphs are fit as an overview and may require user zoom; semantic clustering is deferred until real browser traces establish its rules.
 
 ## Roadmap
 
-Layer 7 is complete. Layer 8 should begin with D1-backed investigation history and shareable reports; Durable Objects remain deferred until a concrete real-time coordination requirement exists. The remaining milestones are tracked in [the implementation plan](./docs/implementation-plan.md).
+Layer 8 is complete. Layer 9 has not started. Durable Objects remain deferred until a concrete real-time coordination requirement exists; Queues, Vectorize/AI Search, full authentication, organizations, and collaboration are also absent. The remaining milestones are tracked in [the implementation plan](./docs/implementation-plan.md).
 
 ## Architecture and planning
 
@@ -205,3 +221,7 @@ Layer 7 is complete. Layer 8 should begin with D1-backed investigation history a
 - [DNS and TLS diagnostics](./docs/dns-tls-diagnostics.md)
 - [Browser investigation](./docs/browser-investigation.md)
 - [Browser artifacts](./docs/browser-artifacts.md)
+- [Persistence architecture](./docs/persistence.md)
+- [D1 schema and migrations](./docs/d1-schema.md)
+- [Share-link security](./docs/share-links.md)
+- [Data retention](./docs/data-retention.md)
