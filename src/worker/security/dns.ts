@@ -49,7 +49,7 @@ export interface DnsQueryResult {
   response: DohResponse;
   collectedAt: string;
   durationMs: number;
-  source: "Cloudflare 1.1.1.1 DNS-over-HTTPS JSON API";
+  source: string;
 }
 
 export interface DnsQueryClient {
@@ -131,7 +131,7 @@ export class CloudflareDohClient implements DnsQueryClient {
       response: parsed.data,
       collectedAt: this.wallClockNow().toISOString(),
       durationMs: roundedDuration(started, this.monotonicNow()),
-      source: "Cloudflare 1.1.1.1 DNS-over-HTTPS JSON API",
+      source: "Injected address resolver adapter",
     };
   }
 }
@@ -146,11 +146,10 @@ export class CachingDnsQueryClient implements DnsQueryClient {
     recordType: DnsRecordType,
     signal?: AbortSignal,
   ): Promise<DnsQueryResult> {
-    if (signal) return this.client.query(hostname, recordType, signal);
     const key = `${hostname.toLowerCase()}|${recordType}`;
     const existing = this.cache.get(key);
     if (existing) return existing;
-    const pending = this.client.query(hostname, recordType).catch((error: unknown) => {
+    const pending = this.client.query(hostname, recordType, signal).catch((error: unknown) => {
       this.cache.delete(key);
       throw error;
     });
@@ -190,5 +189,41 @@ export class DnsQueryAddressResolver implements AddressResolver {
 export class CloudflareDohResolver extends DnsQueryAddressResolver {
   constructor(fetcher: ResolverFetch = (input, init) => fetch(input, init)) {
     super(new CloudflareDohClient(fetcher));
+  }
+}
+
+export class AddressResolverDnsQueryClient implements DnsQueryClient {
+  constructor(
+    private readonly resolver: AddressResolver,
+    private readonly wallClockNow: () => Date = () => new Date(),
+  ) {}
+
+  async query(
+    hostname: string,
+    recordType: DnsRecordType,
+    signal?: AbortSignal,
+  ): Promise<DnsQueryResult> {
+    const addresses =
+      recordType === "A" || recordType === "AAAA"
+        ? await this.resolver.resolve(hostname, signal)
+        : [];
+    return {
+      hostname,
+      recordType,
+      response: {
+        Status: 0,
+        Answer: addresses
+          .filter((address) => assessIpAddress(address).version === (recordType === "A" ? 4 : 6))
+          .map((address) => ({
+            name: `${hostname}.`,
+            type: DNS_RECORD_CODES[recordType],
+            TTL: 0,
+            data: address,
+          })),
+      },
+      collectedAt: this.wallClockNow().toISOString(),
+      durationMs: 0,
+      source: "Cloudflare 1.1.1.1 DNS-over-HTTPS JSON API",
+    };
   }
 }

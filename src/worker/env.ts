@@ -4,15 +4,24 @@ export interface Env {
   HTTP_HOP_TIMEOUT_MS?: string;
   HTTP_OVERALL_TIMEOUT_MS?: string;
   HTTP_INVESTIGATION_RATE_LIMITER?: RateLimit;
+  DNS_TIMEOUT_MS?: string;
+  CERTIFICATE_TIMEOUT_MS?: string;
 }
 
 export interface RuntimeLimits {
   hopTimeoutMs: number;
   overallTimeoutMs: number;
+  dnsTimeoutMs: number;
+  certificateTimeoutMs: number;
+  maximumDiagnosticHostnames: number;
+  maximumCertificateInspections: number;
+  investigationTimeoutMs: number;
 }
 
 const DEFAULT_HOP_TIMEOUT_MS = 8_000;
 const DEFAULT_OVERALL_TIMEOUT_MS = 20_000;
+const DEFAULT_DNS_TIMEOUT_MS = 5_000;
+const DEFAULT_CERTIFICATE_TIMEOUT_MS = 5_000;
 
 function boundedInteger(value: string | undefined, fallback: number, maximum: number): number {
   if (!value) return fallback;
@@ -29,5 +38,14 @@ export function readRuntimeLimits(env: Env): RuntimeLimits {
       DEFAULT_OVERALL_TIMEOUT_MS,
       30_000,
     ),
+    dnsTimeoutMs: boundedInteger(env.DNS_TIMEOUT_MS, DEFAULT_DNS_TIMEOUT_MS, 10_000),
+    certificateTimeoutMs: boundedInteger(
+      env.CERTIFICATE_TIMEOUT_MS,
+      DEFAULT_CERTIFICATE_TIMEOUT_MS,
+      10_000,
+    ),
+    maximumDiagnosticHostnames: 3,
+    maximumCertificateInspections: 3,
+    investigationTimeoutMs: 30_000,
   };
 }

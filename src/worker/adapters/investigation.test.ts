@@ -1,8 +1,13 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { investigationSchema } from "../../features/investigation/schema";
-import type { HttpDiagnosticResult } from "../diagnostics/types";
-import { adaptHttpDiagnosticToInvestigation } from "./investigation";
+import type { CertificateDiagnosticResult, CertificateEvidence } from "../diagnostics/certificate";
+import type { DnsDiagnosticResult } from "../diagnostics/dns";
+import type { HttpDiagnosticResult, NetworkDiagnosticResult } from "../diagnostics/types";
+import {
+  adaptHttpDiagnosticToInvestigation,
+  adaptNetworkDiagnosticToInvestigation,
+} from "./investigation";
 
 const startedAt = "2026-07-16T20:00:00.000Z";
 const completedAt = "2026-07-16T20:00:00.120Z";
@@ -33,6 +38,105 @@ function diagnostic(overrides: Partial<HttpDiagnosticResult> = {}): HttpDiagnost
     startedAt,
     completedAt,
     totalDurationMs: 120,
+    ...overrides,
+  };
+}
+
+function dnsResult(
+  hostname = "example.com",
+  overrides: Partial<DnsDiagnosticResult> = {},
+): DnsDiagnosticResult {
+  return {
+    hostname,
+    status: "success",
+    records: [],
+    aliasChain: [],
+    terminalHostname: hostname,
+    addresses: [
+      {
+        hostname,
+        recordType: "A",
+        ttl: 300,
+        assessment: { address: "93.184.216.34", version: 4, range: "unicast", allowed: true },
+      },
+    ],
+    queries: [],
+    dnssec: {
+      status: "unavailable",
+      explanation: "Resolver metadata unavailable.",
+      authenticatedDataSignals: [],
+      comments: [],
+      source: "Fixture resolver",
+    },
+    startedAt,
+    completedAt,
+    durationMs: 5,
+    ...overrides,
+  };
+}
+
+function certificateEvidence(hostname = "example.com"): CertificateEvidence {
+  return {
+    requestedHostname: hostname,
+    connectionHostname: hostname,
+    connectionAddress: "93.184.216.34",
+    subject: { commonName: hostname },
+    subjectAlternativeNames: [hostname],
+    sanValuesTruncated: false,
+    issuer: { commonName: "Fixture CA" },
+    serialNumber: "01",
+    validFrom: "2026-07-01T00:00:00.000Z",
+    validUntil: "2026-10-01T00:00:00.000Z",
+    daysUntilExpiration: 77,
+    validityStatus: "valid",
+    hostnameCoverage: {
+      covered: true,
+      matchedName: hostname,
+      matchType: "exact-san",
+      explanation: "Exact SAN match.",
+    },
+    chain: [],
+    chainTruncated: false,
+    publicKeyAlgorithm: "RSA",
+    publicKeyBits: 2048,
+    signatureAlgorithm: "unavailable",
+    source: "Independent Cloudflare Worker node:tls certificate probe",
+    collectedAt: completedAt,
+    durationMs: 7,
+    fetchSessionMetadata: {
+      tlsVersion: "unavailable",
+      cipherSuite: "unavailable",
+      alpn: "unavailable",
+      handshakeDurationMs: "unavailable",
+      tcpDurationMs: "unavailable",
+      explanation: "The fetch session is separate.",
+    },
+  };
+}
+
+function certificateResult(hostname = "example.com"): CertificateDiagnosticResult {
+  return {
+    hostname,
+    connectionAddress: "93.184.216.34",
+    status: "success",
+    startedAt,
+    completedAt,
+    durationMs: 7,
+    certificate: certificateEvidence(hostname),
+  };
+}
+
+function network(
+  http: HttpDiagnosticResult = diagnostic(),
+  overrides: Partial<NetworkDiagnosticResult> = {},
+): NetworkDiagnosticResult {
+  return {
+    http,
+    dns: [dnsResult()],
+    certificates: [certificateResult()],
+    startedAt,
+    completedAt,
+    totalDurationMs: 140,
     ...overrides,
   };
 }
@@ -214,5 +318,114 @@ describe("HTTP diagnostic investigation adapter", () => {
     expect(first.stages.flatMap((stage) => stage.evidence.map((item) => item.id))).toEqual(
       second.stages.flatMap((stage) => stage.evidence.map((item) => item.id)),
     );
+  });
+});
+
+describe("DNS and TLS investigation adapter", () => {
+  it("places DNS and TLS before the final HTTPS response without graph-specific data", () => {
+    const investigation = adaptNetworkDiagnosticToInvestigation(network(), {
+      id: "network-direct",
+    });
+    expect(investigationSchema.safeParse(investigation).success).toBe(true);
+    expect(investigation.stages.map((stage) => stage.id)).toEqual([
+      "input",
+      "dns-1",
+      "tls-1",
+      "http-response",
+      "cache-analysis",
+      "document-received",
+    ]);
+    expect(investigation.metrics).toMatchObject({ dnsMs: 5, tlsMs: 7, totalDurationMs: 140 });
+    expect(investigation.stages.every((stage) => !("position" in stage))).toBe(true);
+  });
+
+  it("places same-host TLS after HTTP upgrades to HTTPS and does not duplicate DNS", () => {
+    const http = diagnostic({
+      normalizedUrl: {
+        canonicalUrl: "http://example.com/",
+        displayUrl: "http://example.com/",
+        hostname: "example.com",
+        protocol: "http:",
+      },
+      redirects: [
+        {
+          index: 0,
+          sourceUrl: "http://example.com/",
+          status: 301,
+          statusText: "Moved Permanently",
+          location: "https://example.com/",
+          destinationUrl: "https://example.com/",
+          destinationValidation: "passed",
+          durationMs: 10,
+          headers: { location: "https://example.com/" },
+          headersTruncated: false,
+          collectedAt: startedAt,
+        },
+      ],
+    });
+    const investigation = adaptNetworkDiagnosticToInvestigation(network(http), { id: "upgrade" });
+    expect(investigation.stages.map((stage) => stage.id).slice(0, 5)).toEqual([
+      "input",
+      "dns-1",
+      "redirect-1",
+      "tls-1",
+      "http-response",
+    ]);
+    expect(investigation.stages.filter((stage) => stage.type === "dns")).toHaveLength(1);
+  });
+
+  it("preserves a certificate-probe warning while keeping successful HTTP evidence", () => {
+    const unavailable: CertificateDiagnosticResult = {
+      hostname: "example.com",
+      connectionAddress: "93.184.216.34",
+      status: "warning",
+      startedAt,
+      completedAt,
+      durationMs: 5,
+      error: {
+        code: "probe_connection_failed",
+        message: "Probe unavailable.",
+        retryable: true,
+      },
+    };
+    const investigation = adaptNetworkDiagnosticToInvestigation(
+      network(diagnostic(), { certificates: [unavailable] }),
+      { id: "cert-partial" },
+    );
+    expect(investigation.status).toBe("completed");
+    expect(investigation.stages.find((stage) => stage.type === "tls")).toMatchObject({
+      status: "warning",
+    });
+    expect(investigation.findings).toContainEqual(
+      expect.objectContaining({
+        title: "Independent certificate inspection unavailable",
+        severity: "info",
+      }),
+    );
+  });
+
+  it("links expired and hostname-mismatch findings to TLS evidence", () => {
+    const observed = certificateEvidence();
+    observed.validityStatus = "expired";
+    observed.daysUntilExpiration = -2;
+    observed.hostnameCoverage = {
+      covered: false,
+      matchType: "none",
+      explanation: "No SAN covered the host.",
+    };
+    const investigation = adaptNetworkDiagnosticToInvestigation(
+      network(diagnostic(), {
+        certificates: [{ ...certificateResult(), certificate: observed }],
+      }),
+      { id: "invalid-cert" },
+    );
+    const tlsEvidenceIds = new Set(
+      investigation.stages.find((stage) => stage.type === "tls")?.evidence.map((item) => item.id),
+    );
+    const tlsFindings = investigation.findings.filter((finding) => finding.category === "tls");
+    expect(tlsFindings.map((finding) => finding.severity)).toEqual(["high", "high"]);
+    expect(
+      tlsFindings.flatMap((finding) => finding.evidenceIds).every((id) => tlsEvidenceIds.has(id)),
+    ).toBe(true);
   });
 });

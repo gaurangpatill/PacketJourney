@@ -3,15 +3,26 @@ import {
   httpInvestigationResponseSchema,
   type InvestigationApiError,
 } from "../features/investigation/httpApi";
-import { adaptHttpDiagnosticToInvestigation } from "./adapters/investigation";
+import { adaptNetworkDiagnosticToInvestigation } from "./adapters/investigation";
+import {
+  type CertificateInspector,
+  UnavailableCertificateInspector,
+  WorkerTlsCertificateInspector,
+} from "./diagnostics/certificate";
+import { investigateNetworkJourney } from "./diagnostics/orchestrator";
 import { responseHeaders } from "./cors";
-import { traceHttpRedirects, type DiagnosticFetch } from "./diagnostics/redirects";
+import type { DiagnosticFetch } from "./diagnostics/redirects";
 import type { DiagnosticError } from "./diagnostics/types";
 import type { Env } from "./env";
 import { readRuntimeLimits } from "./env";
 import { errorResponse, WorkerError } from "./errors";
 import { logEvent } from "./logging";
 import { type AddressResolver, CloudflareDohResolver } from "./security/dns";
+import {
+  AddressResolverDnsQueryClient,
+  CloudflareDohClient,
+  type DnsQueryClient,
+} from "./security/dns";
 import { SsrfPolicyError } from "./security/ssrf";
 import { UrlPolicyError } from "./security/url";
 
@@ -22,6 +33,8 @@ export interface RouterDependencies {
   resolver?: AddressResolver;
   targetFetch?: DiagnosticFetch;
   investigationId?: () => string;
+  dnsClient?: DnsQueryClient;
+  certificateInspector?: CertificateInspector;
 }
 
 function requestError(message: string): WorkerError {
@@ -97,8 +110,6 @@ function knownErrorResponse(error: unknown, headers: Headers): Response | undefi
 }
 
 export function createRouter(dependencies: RouterDependencies = {}) {
-  const resolver = dependencies.resolver ?? new CloudflareDohResolver();
-
   return async function routeRequest(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     const headers = responseHeaders(request, env);
@@ -156,27 +167,44 @@ export function createRouter(dependencies: RouterDependencies = {}) {
           throw requestError("Provide a JSON object with one non-empty URL string.");
         }
 
-        const diagnostic = await traceHttpRedirects(
+        const dnsClient =
+          dependencies.dnsClient ??
+          (dependencies.resolver
+            ? new AddressResolverDnsQueryClient(dependencies.resolver)
+            : new CloudflareDohClient());
+        const resolver = dependencies.resolver ?? new CloudflareDohResolver();
+        const certificateInspector =
+          dependencies.certificateInspector ??
+          (dependencies.resolver
+            ? new UnavailableCertificateInspector(
+                "Certificate inspection was unavailable in the configured diagnostic runtime.",
+              )
+            : new WorkerTlsCertificateInspector());
+        const diagnostic = await investigateNetworkJourney(
           parsedRequest.data.url,
           readRuntimeLimits(env),
           {
+            dnsClient,
             resolver,
             fetcher: dependencies.targetFetch,
+            certificateInspector,
           },
         );
-        const investigation = adaptHttpDiagnosticToInvestigation(diagnostic, {
+        const investigation = adaptNetworkDiagnosticToInvestigation(diagnostic, {
           id: dependencies.investigationId?.(),
         });
         const payload = httpInvestigationResponseSchema.parse({
           investigation,
-          partialError: partialError(diagnostic.error),
+          partialError: partialError(diagnostic.http.error),
         });
-        logEvent(diagnostic.error ? "warn" : "info", "investigation.completed", {
+        logEvent(diagnostic.http.error ? "warn" : "info", "investigation.completed", {
           investigationId: investigation.id,
           status: investigation.status,
-          redirectCount: diagnostic.redirects.length,
-          finalStatus: diagnostic.finalResponse?.status,
-          diagnosticError: diagnostic.error?.code,
+          dnsHostnameCount: diagnostic.dns.length,
+          certificateInspectionCount: diagnostic.certificates.length,
+          redirectCount: diagnostic.http.redirects.length,
+          finalStatus: diagnostic.http.finalResponse?.status,
+          diagnosticError: diagnostic.http.error?.code,
         });
         return Response.json(payload, { status: 200, headers });
       } catch (error) {

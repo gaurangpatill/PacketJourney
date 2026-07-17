@@ -118,7 +118,7 @@ async function fetchHop(
 
 export async function traceHttpRedirects(
   input: string,
-  limits: RuntimeLimits,
+  limits: Pick<RuntimeLimits, "hopTimeoutMs" | "overallTimeoutMs">,
   dependencies: RedirectTraceDependencies,
 ): Promise<HttpDiagnosticResult> {
   const fetcher = dependencies.fetcher ?? fetch;

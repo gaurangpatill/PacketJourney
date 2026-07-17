@@ -431,3 +431,30 @@ export class WorkerTlsCertificateInspector implements CertificateInspector {
     });
   }
 }
+
+export class UnavailableCertificateInspector implements CertificateInspector {
+  constructor(
+    private readonly reason = "Certificate inspection is not configured in this runtime.",
+  ) {}
+
+  inspect(
+    hostname: string,
+    connectionAddress: string,
+    options: CertificateInspectionOptions = {},
+  ): Promise<CertificateDiagnosticResult> {
+    const now = options.wallClockNow?.() ?? new Date();
+    return Promise.resolve({
+      hostname: hostnameToAscii(hostname),
+      connectionAddress,
+      status: "warning",
+      startedAt: now.toISOString(),
+      completedAt: now.toISOString(),
+      durationMs: 0,
+      error: {
+        code: "certificate_unavailable",
+        message: this.reason,
+        retryable: true,
+      },
+    });
+  }
+}

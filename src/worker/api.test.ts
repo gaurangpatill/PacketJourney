@@ -4,7 +4,7 @@ import {
   httpInvestigationResponseSchema,
   investigationErrorResponseSchema,
 } from "../features/investigation/httpApi";
-import type { AddressResolver } from "./security/dns";
+import type { AddressResolver, DnsQueryClient, DnsRecordType } from "./security/dns";
 import { createRouter } from "./router";
 
 const endpoint = "https://api.packetjourney.example/api/v1/investigations/http";
@@ -12,6 +12,19 @@ const endpoint = "https://api.packetjourney.example/api/v1/investigations/http";
 class PublicResolver implements AddressResolver {
   resolve(): Promise<string[]> {
     return Promise.resolve(["93.184.216.34"]);
+  }
+}
+
+class MissingDnsClient implements DnsQueryClient {
+  query(hostname: string, recordType: DnsRecordType) {
+    return Promise.resolve({
+      hostname,
+      recordType,
+      response: { Status: 3, AD: false, Answer: [] },
+      collectedAt: "2026-07-16T12:00:00.000Z",
+      durationMs: 1,
+      source: "Fixture resolver",
+    });
   }
 }
 
@@ -56,6 +69,11 @@ describe("POST /api/v1/investigations/http", () => {
         mock: false,
       },
     });
+    expect(
+      httpInvestigationResponseSchema
+        .parse(payload)
+        .investigation.stages.find((stage) => stage.type === "tls"),
+    ).toMatchObject({ status: "warning" });
   });
 
   it("rejects malformed JSON and invalid request bodies", async () => {
@@ -120,6 +138,32 @@ describe("POST /api/v1/investigations/http", () => {
     });
   });
 
+  it("returns a structured DNS failure journey without starting HTTP", async () => {
+    const targetFetch = vi.fn();
+    const router = createRouter({
+      resolver: new PublicResolver(),
+      dnsClient: new MissingDnsClient(),
+      targetFetch,
+      investigationId: () => "live-dns-failure",
+    });
+    const response = await router(investigationRequest("https://missing.example"), {
+      ENVIRONMENT: "test",
+    });
+    const payload = httpInvestigationResponseSchema.parse(await response.json());
+
+    expect(response.status).toBe(200);
+    expect(payload).toMatchObject({
+      investigation: { id: "live-dns-failure", status: "failed" },
+      partialError: { code: "upstream_error", stage: "dns", retryable: true },
+    });
+    expect(payload.investigation.stages.map((stage) => stage.type)).toEqual([
+      "input",
+      "dns",
+      "error",
+    ]);
+    expect(targetFetch).not.toHaveBeenCalled();
+  });
+
   it("preserves a public redirect before blocking its private destination", async () => {
     const targetFetch = vi.fn().mockResolvedValue(
       new Response(null, {
@@ -144,7 +188,10 @@ describe("POST /api/v1/investigations/http", () => {
     });
     expect(payload.investigation.stages.map((stage) => stage.id)).toEqual([
       "input",
+      "dns-1",
+      "tls-1",
       "redirect-1",
+      "dns-2",
       "terminal-error",
     ]);
   });

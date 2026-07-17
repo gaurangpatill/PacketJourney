@@ -27,6 +27,7 @@ export interface FinalHttpResponse {
 }
 
 export type DiagnosticErrorCode =
+  | "dns_resolution_failed"
   | "redirect_loop"
   | "missing_redirect_location"
   | "invalid_redirect_destination"
@@ -39,9 +40,18 @@ export type DiagnosticErrorCode =
 export interface DiagnosticError {
   code: DiagnosticErrorCode;
   message: string;
-  stage: "redirect" | "http";
+  stage: "dns" | "redirect" | "http";
   retryable: boolean;
   details?: Record<string, unknown>;
+}
+
+export interface NetworkDiagnosticResult {
+  http: HttpDiagnosticResult;
+  dns: import("./dns").DnsDiagnosticResult[];
+  certificates: import("./certificate").CertificateDiagnosticResult[];
+  startedAt: string;
+  completedAt: string;
+  totalDurationMs: number;
 }
 
 export interface HttpDiagnosticResult {

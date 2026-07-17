@@ -92,6 +92,7 @@ export interface DnsDiagnosticOptions {
   includeDetailRecords?: boolean;
   monotonicNow?: () => number;
   wallClockNow?: () => Date;
+  signal?: AbortSignal;
 }
 
 function normalizeHostname(value: string): string {
@@ -244,7 +245,7 @@ export async function collectDnsDiagnostic(
   let error: DnsDiagnosticError | undefined;
 
   const runQuery = async (name: string, type: DnsRecordType): Promise<DnsQueryResult> => {
-    const result = await client.query(name, type);
+    const result = await client.query(name, type, options.signal);
     queries.push(result);
     records.push(...recordsFromQuery(result));
     return result;
@@ -338,7 +339,7 @@ export async function collectDnsDiagnostic(
     hostname: normalizedHostname,
     status: error
       ? "error"
-      : interpretDnssec(queries).status === "inconclusive"
+      : interpretDnssec(queries).status === "validation-failed"
         ? "warning"
         : "success",
     records: deduplicatedRecords,
