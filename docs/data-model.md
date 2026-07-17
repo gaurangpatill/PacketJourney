@@ -9,6 +9,23 @@ The canonical investigation model distinguishes observations from conclusions.
 
 Runtime schemas are authoritative. TypeScript types are inferred from those schemas so persisted data, Worker responses, fixtures, and UI state cannot drift silently.
 
+Layer 3 adds the `live-http` scenario discriminator. `mock: false` identifies live Worker results; the existing seven scenario discriminators remain recorded examples with `mock: true`. Scenario is descriptive metadata and never drives graph layout.
+
+The versioned API validates both envelopes:
+
+```ts
+type HttpInvestigationResponse = {
+  investigation: Investigation;
+  partialError?: InvestigationApiError;
+};
+
+type InvestigationErrorResponse = {
+  error: InvestigationApiError;
+};
+```
+
+HTTP diagnostic types are internal Worker contracts. The adapter maps them into evidence and stages; redirect indices, raw allowlisted headers, cache classifications, security checks, and error states do not leak visualization positions into the domain model.
+
 Stage IDs and evidence IDs must be unique. Connections must reference an existing stage and cannot point back to the same stage. These runtime invariants make graph adaptation deterministic and prevent ambiguous selections.
 
 ## Visualization adapter model
@@ -18,3 +35,5 @@ Stage IDs and evidence IDs must be unique. Connections must reference an existin
 The `branch` field remains a semantic grouping hint for parallel work, not a coordinate or visualization-library lane ID. Real diagnostics may omit it; investigation order and topology provide stable fallbacks.
 
 Simulated evidence will use a separate simulation marker and will never overwrite collected evidence. AI-generated explanations remain conclusions even when they cite verified evidence.
+
+For live HTTP results, raw status/header/location observations are `verified`. Parsed cache dispositions and vendor/intermediary rules are `inferred` unless a target-specific header directly verifies the fact. Findings remain conclusions even when their confidence is 1.0; every finding references existing evidence IDs and the schema rejects dangling references.

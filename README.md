@@ -2,7 +2,7 @@
 
 Packet Journey is an AI-assisted network investigation environment that reconstructs, visualizes, and diagnoses the path from a URL to a rendered webpage.
 
-The project is being built in validated layers. Layers 1 and 2 are complete: a production-shaped frontend and an interactive journey graph backed by realistic seeded investigation data. Live diagnostics are not represented as complete until their corresponding milestones pass validation.
+The project is being built in validated layers. Layers 1–3 are complete: a production-shaped frontend, an interactive journey graph, and a real deterministic HTTP investigation API running on Cloudflare Workers. DNS/TLS phase inspection, browser execution, and AI are not represented as active features.
 
 ![Packet Journey third-party dependency visualization](./docs/assets/journey-visualization.png)
 
@@ -15,29 +15,32 @@ The project is being built in validated layers. Layers 1 and 2 are complete: a p
 - A synchronized timeline with playback, pause, restart, stage skipping, and progressive reveal.
 - An evidence inspector for stages and relationships, including verified/inferred provenance, timestamps, related findings, and bottleneck status.
 - Beginner, developer, and network-engineer explanation modes over one evidence model.
-- Deliberate loading, empty, invalid URL, missing investigation, TLS failure, and mobile states.
+- Live HTTP URL intake with stage-aware loading, structured retry/error states, and no fixture fallback.
+- Manual redirect tracing, response status and timing, allowlisted headers, cache/security findings, and partial-result journeys.
+- Deliberate loading, empty, invalid URL, blocked destination, missing investigation, TLS failure, and mobile states.
 
-All current protocol evidence is marked as recorded fixture data. Layer 2 does not perform network requests; live HTTP collection begins in Layer 3.
+The seven seeded demonstrations remain stable recorded examples. Live workspaces are labeled **Live HTTP evidence** and contain only facts returned by the Worker or limited deterministic inferences with provenance.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    URL[Public URL] --> SAFE[Validation and SSRF boundary]
-    SAFE --> TOOLS[Deterministic diagnostic tools]
-    TOOLS --> EVIDENCE[Normalized evidence]
-    EVIDENCE --> RULES[Deterministic findings]
-    EVIDENCE --> AI[Restricted AI investigator]
-    RULES --> MODEL[Investigation model]
-    AI --> MODEL
-    MODEL --> UI[Journey, inspector, and findings]
+    UI[React client] -->|POST /api/v1/investigations/http| W[Cloudflare Worker]
+    W --> N[URL normalization]
+    N --> S[SSRF policy + DoH preflight]
+    S --> R[Manual redirect tracer]
+    R --> H[Allowlisted headers + timing]
+    H --> D[Deterministic cache/security rules]
+    D --> M[Validated Investigation schema]
+    M --> UI
+    DEMO[Recorded examples] --> UI
 ```
 
-The browser UI is React with strict TypeScript and Zod runtime schemas. A library-neutral adapter derives graph nodes, relationship edges, primary/secondary paths, confidence, and bottlenecks. A custom layered SVG layout renders that model without storing coordinates in the investigation schema. The planned backend uses Cloudflare Workers for orchestration, then adds Browser Rendering, Queues, Durable Objects, D1, and R2 only where their responsibilities become necessary. Workers AI is downstream of evidence and routed through AI Gateway.
+The React client and Worker share strict TypeScript and Zod runtime contracts. The Worker never returns graph coordinates; a library-neutral client adapter derives graph nodes, relationships, primary/secondary paths, confidence, and bottlenecks. Cloudflare Workers performs safe deterministic HTTP collection, with a native Rate Limiting binding protecting the expensive endpoint. D1, R2, Durable Objects, Queues, Browser Rendering, Workers AI, AI Gateway, and Vectorize are not wired into Layer 3.
 
 ## Request lifecycle
 
-The target lifecycle is intake → normalization → public-network safety validation → deterministic HTTP/DNS/TLS/browser tools → normalized evidence → deterministic findings → optional AI explanation → adaptive journey rendering. See [the pipeline design](./docs/investigation-pipeline.md) for failure and partial-result behavior.
+The Layer 3 lifecycle is intake → runtime request validation → URL normalization → public-network and DNS-answer safety checks → bounded manual redirects → header/timing collection → deterministic cache/security analysis → canonical investigation validation → adaptive rendering. Completed redirect evidence is retained if a later target is blocked or fails. See [the pipeline design](./docs/investigation-pipeline.md).
 
 ## Local development
 
@@ -48,7 +51,16 @@ npm install
 npm run dev
 ```
 
-Vite prints the local development URL. No environment variables or Cloudflare credentials are required through Layer 2.
+`npm run dev` starts Vite on port 5173 and Wrangler on port 8787; Vite proxies `/api` to the Worker. Local development and tests require no Cloudflare credentials. Copy `.dev.vars.example` to `.dev.vars` only when overriding local variables.
+
+Useful split commands:
+
+```bash
+npm run dev:web
+npm run dev:worker
+npm run build:web
+npm run build:worker
+```
 
 ## Quality checks
 
@@ -61,19 +73,32 @@ npm run build
 npm audit
 ```
 
-The current suite covers URL normalization, schema integrity, graph adaptation, cache hits/misses, redirects, failure termination, third-party branching, deterministic layout, 50-node/100-edge performance, selection, expertise modes, inspector updates, timeline synchronization, playback, reduced motion, routes, and form validation. Future network tests will use recorded fixtures instead of depending on live websites.
+The deterministic suite covers client and Worker URL handling, SSRF IP/hostname policy, DoH parsing, redirect chains and failures, header filtering, cache/security rules, infrastructure clues, canonical adaptation, API/CORS/error envelopes, graph behavior, accessibility interactions, and the seven recorded journeys. Main tests use mocked responses and do not require public Internet access.
 
 ## Deployment
 
-`npm run build` produces the static client in `dist/`. It can be deployed to Cloudflare Pages with SPA fallback to `index.html`. Worker deployment configuration will be added with Layer 3; there is intentionally no nonfunctional Worker manifest today.
+`npm run build` builds the static client and runs a Wrangler Worker dry run. Deploy the client to a static host with SPA fallback, then deploy the Worker with:
+
+```bash
+npm run deploy:preview
+npm run deploy:production
+```
+
+Set `VITE_API_BASE_URL` at frontend build time when the API is on another origin. Configure `CORS_ALLOWED_ORIGINS` on the Worker as a comma-separated exact allowlist for those frontend origins.
 
 ## Environment variables
 
-Layers 1 and 2 have none. Later milestones will document and validate Cloudflare binding names and model configuration without placing credentials in the client bundle.
+- `VITE_API_BASE_URL` — optional public Worker origin; omitted for same-origin/proxied local requests.
+- `ENVIRONMENT` — `development`, `preview`, `production`, or `test` label used in health output.
+- `CORS_ALLOWED_ORIGINS` — optional comma-separated exact origin allowlist.
+- `HTTP_HOP_TIMEOUT_MS` — optional 250–15,000 ms override; default 8,000 ms.
+- `HTTP_OVERALL_TIMEOUT_MS` — optional 250–30,000 ms override; default 20,000 ms.
+
+No credentials, tokens, storage bindings, or AI model keys are required in Layer 3.
 
 ## Security considerations
 
-Client URL validation is a usability guard, not an SSRF defense. Live investigation will not ship until the Worker validates schemes, hostnames, resolved IPs, every redirect target, response limits, and timeouts as specified in [the security model](./docs/security.md). URLs containing credentials and non-HTTP(S) schemes are already rejected at intake.
+Client URL validation is only a usability guard. The Worker independently rejects credentials, unsupported protocols, internal hostnames, private/reserved IPv4 and IPv6 ranges, IPv4-mapped bypasses, metadata addresses, and unsafe DNS answers. Every redirect is normalized and revalidated before following. Target bodies are never consumed, response headers use a non-sensitive allowlist, and time/redirect/header limits are explicit. See [the security model](./docs/security.md) for the remaining DNS-rebinding limitation.
 
 ## Design decisions
 
@@ -84,18 +109,25 @@ Client URL validation is a usability guard, not an SSRF defense. Live investigat
 - Use deterministic seeded scenarios as a reliable portfolio/demo surface before live network behavior exists.
 - Keep visualization state in a graph adapter and controller instead of contaminating the canonical investigation schema with coordinates or UI selection.
 - Use a custom layered SVG layout for stable output, accessible HTML nodes, precise Packet Journey styling, and independent adapter/layout tests.
+- Use Cloudflare's public DoH endpoint as a fail-closed hostname preflight while acknowledging that Workers cannot pin the later fetch to the preflight answer.
+- Use minimal `GET` plus immediate body cancellation instead of relying on inconsistent `HEAD` support.
+- Keep live HTTP results and recorded examples explicit; never silently substitute one for the other.
+- Apply a coarse 20-request/minute, per-location/client-network Worker Rate Limiting binding before diagnostic work; do not treat it as identity or billing accounting.
 
 ## Known limitations
 
-- No live network, DNS, TLS, or browser collection yet.
+- Live collection currently covers HTTP response headers, statuses, redirects, and Worker-observed timings only.
+- Workers does not expose DNS lookup, TCP connection, TLS handshake, cipher, ALPN, origin-only, or browser render timings through standard fetch.
+- DoH preflight checks observed answers but cannot pin the target connection, so it reduces rather than eliminates DNS-rebinding risk.
+- Some targets reject or treat data-center/Worker requests differently from browser traffic.
 - AI commands, simulations, persistence, sharing, export, and authentication are not active.
-- Cloudflare bindings and deployment automation begin only when a working backend requires them.
+- No D1, R2, Durable Objects, Queues, Browser Rendering, Workers AI, AI Gateway, or Vectorize bindings exist yet.
 - Layout is optimized for directed acyclic request journeys. Defensive cyclic input rendering exists, but cycle-specific routing is not a Layer 2 feature.
 - Very large graphs are fit as an overview and may require user zoom; semantic clustering is deferred until real browser traces establish its rules.
 
 ## Roadmap
 
-The next milestone is Layer 3: deterministic HTTP investigation with URL normalization, SSRF-safe fetch, redirect tracing, response timing, header analysis, CDN clues, structured failures, and fixture-backed tests. The remaining milestones are tracked in [the implementation plan](./docs/implementation-plan.md).
+The next milestone is Layer 4: DNS records and TLS certificate investigation with graceful Cloudflare runtime degradation. It has not started. The remaining milestones are tracked in [the implementation plan](./docs/implementation-plan.md).
 
 ## Architecture and planning
 
@@ -107,3 +139,5 @@ The next milestone is Layer 3: deterministic HTTP investigation with URL normali
 - [Data model](./docs/data-model.md)
 - [Counterfactual engine](./docs/counterfactual-engine.md)
 - [Journey visualization](./docs/journey-visualization.md)
+- [HTTP diagnostics](./docs/http-diagnostics.md)
+- [Cloudflare runtime](./docs/cloudflare-runtime.md)

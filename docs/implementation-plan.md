@@ -64,7 +64,7 @@ In Layer 1, the orchestrator boundary is represented by seeded mock investigatio
 
 - [x] Layer 1 — Product foundation
 - [x] Layer 2 — Adaptive journey visualization
-- [ ] Layer 3 — Deterministic HTTP investigation and SSRF-safe fetch (in progress)
+- [x] Layer 3 — Deterministic HTTP investigation and SSRF-safe fetch
 - [ ] Layer 4 — DNS and TLS investigation
 - [ ] Layer 5 — Browser investigation
 - [ ] Layer 6 — Deterministic findings engine
@@ -199,3 +199,40 @@ Known limitations:
 - Fit-to-view prioritizes the whole journey; large graphs require zoom for detailed reading. Evidence-based semantic clustering is deferred until browser traces exist.
 - Touch gestures use drag pan and explicit zoom controls; multi-touch pinch handling is not yet specialized.
 - The compact landing-page preview remains intentionally non-interactive; the investigation workspace is the full central visualization.
+
+### Layer 3 — Deterministic HTTP investigation on Cloudflare Workers (complete, 2026-07-16)
+
+Implemented:
+
+- ES-module Cloudflare Worker, Wrangler local/preview/production configuration, typed environment bindings, Vite API proxy, exact-origin CORS handling, structured logging, request IDs, and runtime API envelopes.
+- Canonical URL normalization for HTTP(S), scheme insertion, credential/fragment/port handling, hostname validation, and strict input limits.
+- SSRF policy covering internal names, metadata targets, private/loopback/link-local/carrier-grade/reserved/multicast IPv4, IPv6 local/reserved ranges, mapped IPv4 bypasses, and unusual WHATWG IP representations.
+- Fail-closed Cloudflare DoH A/AAAA preflight for hostnames plus full destination revalidation on every redirect.
+- Minimal fixed-header GET collector with manual redirects, eight-hop bound, loop/missing/invalid/blocked destination handling, per-hop/overall timeouts, monotonic timing, allowlisted header limits, and immediate target-body cancellation.
+- Deterministic cache directive analysis, security-header presence checks, cautious infrastructure clues, and schema-validated findings referencing evidence IDs.
+- Canonical live journey adapter with explicit redirect stages, evidence-backed edge stages, cache warnings, document-received semantics, and terminal partial-error stages without graph coupling.
+- Live frontend loading/progress, structured errors, conditional retry, recorded-example escape routes, live/recorded labeling, and removal of the URL fixture fallback.
+- Documentation for the Worker boundary, diagnostics, SSRF defenses, runtime constraints, API lifecycle, environments, deployment, and limitations.
+
+Validation:
+
+- `npm run format` — passed.
+- `npm run typecheck` — passed with strict and unchecked-index rules.
+- `npm run lint` — passed with zero warnings.
+- `npm run test` — 134 tests passed across 19 files.
+- `npm run build:web` — passed; 370.90 kB JavaScript / 109.50 kB gzip and 42.22 kB CSS / 8.93 kB gzip.
+- `npm run build:worker` — passed; 210.83 kB upload / 39.83 kB gzip with the native rate-limit binding.
+- `npm audit` — zero production or development vulnerabilities.
+- Local Worker smoke — health 200, loopback rejection 403, public example.com 200, and a real GitHub HTTP→HTTPS redirect completed.
+- Combined development smoke — live SPA route 200 and Vite `/api` proxy returned the Worker structured private-target rejection.
+- Manual headless Chrome review — live desktop workspace and 500 px narrow recorded workspace checked for graph rendering, evidence labeling, controls, and horizontal containment; a compact-form overflow found during this pass was fixed.
+- Mocked integration coverage includes direct success, multiple/relative redirects, loops, missing locations, maximum redirects, blocked redirect, timeout after partial progress, CORS, and no stack leakage.
+
+Known limitations:
+
+- Standard Workers fetch does not expose DNS/TCP/TLS/browser phase timing or resolved peer addresses. Only subrequest and total investigation durations are reported.
+- DoH preflight cannot pin the subsequent fetch connection, leaving a documented DNS-rebinding time-of-check/time-of-use gap.
+- A cancelled response body means transferred body bytes are unavailable unless the target supplies `Content-Length`; no document contents are retained.
+- The native rate-limit binding is a coarse per-location/client-network abuse guard. Exact per-user or organization quotas require the later identity model.
+- Targets may block or vary responses to Worker/data-center traffic. Live tests are opt-in; the main suite stays deterministic.
+- Layer 4 DNS/TLS collection, Layer 5 browser execution, persistence, streaming, AI, and counterfactuals have not started.
