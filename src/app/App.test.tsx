@@ -70,7 +70,7 @@ describe("application routes", () => {
     renderRoute("/investigate?url=https%3A%2F%2Fexample.com%2F");
 
     expect(await screen.findByRole("heading", { name: "Live HTTP journey" })).toBeInTheDocument();
-    expect(screen.getByText("Live HTTP evidence")).toBeInTheDocument();
+    expect(screen.getByText("Live network evidence")).toBeInTheDocument();
     expect(screen.queryByText("Recorded example")).not.toBeInTheDocument();
   });
 

@@ -1123,6 +1123,10 @@ a {
 .mock-banner strong {
   color: #cab986;
 }
+.mock-banner > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .mock-banner--live {
   border-bottom-color: rgb(80 191 142 / 18%);
   color: #91aa9f;
@@ -1791,6 +1795,8 @@ a {
   }
   .workspace-header__tools {
     width: 100%;
+    min-width: 0;
+    flex-wrap: wrap;
   }
   .expertise-select {
     margin-right: auto;
@@ -1798,6 +1804,14 @@ a {
   .investigation-title {
     align-items: flex-start;
     flex-direction: column;
+  }
+  .investigation-title > div:first-child {
+    width: 100%;
+    min-width: 0;
+  }
+  .investigation-title h1,
+  .investigation-title > div > p:last-child {
+    overflow-wrap: anywhere;
   }
   .investigation-title__meta {
     flex-wrap: wrap;

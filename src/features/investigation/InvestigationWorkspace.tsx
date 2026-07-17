@@ -119,16 +119,16 @@ export function InvestigationWorkspace({
       <div className={`mock-banner${investigation.mock ? "" : " mock-banner--live"}`} role="note">
         <Info size={14} />
         {investigation.mock ? (
-          <>
+          <span>
             <strong>Recorded example</strong> Stable fixture evidence for repeatable product demos.
-          </>
+          </span>
         ) : (
-          <>
-            <strong>{partialError ? "Partial live result" : "Live HTTP evidence"}</strong>
+          <span>
+            <strong>{partialError ? "Partial live result" : "Live network evidence"}</strong>
             {partialError
               ? ` The Worker stopped at ${partialError.stage ?? "HTTP"}: ${partialError.message}`
-              : " Collected by the Cloudflare Worker; no browser rendering or deep DNS/TLS inspection was performed."}
-          </>
+              : " Collected by the Cloudflare Worker with DNS, certificate, redirect, and HTTP diagnostics; no browser rendering was performed."}
+          </span>
         )}
       </div>
 
@@ -239,8 +239,17 @@ export function InvestigationWorkspace({
             value={`${investigation.metrics.dnsMs ?? "—"}${investigation.metrics.dnsMs === undefined ? "" : " ms"}`}
             note={
               investigation.metrics.dnsMs === undefined
-                ? "Not collected in Layer 3"
+                ? "Unavailable for this journey"
                 : "Resolver duration"
+            }
+          />
+          <Metric
+            label="Certificate probe"
+            value={`${investigation.metrics.tlsMs ?? "—"}${investigation.metrics.tlsMs === undefined ? "" : " ms"}`}
+            note={
+              investigation.metrics.tlsMs === undefined
+                ? "Unavailable for this journey"
+                : "Independent probe duration"
             }
           />
           <Metric
