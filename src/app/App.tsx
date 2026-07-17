@@ -5,6 +5,9 @@ import { InvestigationPage } from "./pages/InvestigationPage";
 import { LandingPage } from "./pages/LandingPage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
+import { SavedInvestigationsPage } from "./pages/SavedInvestigationsPage";
+import { SavedInvestigationPage } from "./pages/SavedInvestigationPage";
+import { SharedReportPage } from "./pages/SharedReportPage";
 
 export function App() {
   return (
@@ -14,26 +17,10 @@ export function App() {
         <Route path="explore" element={<ExplorePage />} />
         <Route path="investigate" element={<InvestigationPage />} />
         <Route path="investigations/:investigationId" element={<InvestigationPage />} />
-        <Route
-          path="investigations"
-          element={
-            <PlaceholderPage
-              eyebrow="Investigation library"
-              title="Your investigations, organized."
-              copy="Saved investigations arrive with the persistence milestone. Explore a seeded journey now to see the complete workspace shape."
-            />
-          }
-        />
-        <Route
-          path="saved"
-          element={
-            <PlaceholderPage
-              eyebrow="Saved journeys"
-              title="Nothing saved yet."
-              copy="Shareable links, history, and team ownership are planned for Layer 9 and are not represented as active features today."
-            />
-          }
-        />
+        <Route path="investigations" element={<SavedInvestigationsPage />} />
+        <Route path="saved" element={<SavedInvestigationsPage />} />
+        <Route path="saved/:savedId" element={<SavedInvestigationPage />} />
+        <Route path="shared/:token" element={<SharedReportPage />} />
         <Route
           path="docs"
           element={

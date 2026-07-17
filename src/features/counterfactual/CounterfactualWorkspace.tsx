@@ -47,9 +47,11 @@ function aiContext(result: CounterfactualResult): CounterfactualAiContext {
 export function CounterfactualWorkspace({
   investigation,
   expertise,
+  onResult,
 }: {
   investigation: Investigation;
   expertise: ExpertiseMode;
+  onResult?: (result: CounterfactualResult | undefined) => void;
 }) {
   const suggestions = useMemo(() => suggestCounterfactuals(investigation), [investigation]);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -82,6 +84,7 @@ export function CounterfactualWorkspace({
       );
       const next = runCounterfactual(investigation, scenario);
       setResult(next);
+      onResult?.(next);
       setHistory((current) =>
         [
           next,
@@ -228,6 +231,7 @@ export function CounterfactualWorkspace({
             onClick={() => {
               setHistory([]);
               setResult(undefined);
+              onResult?.(undefined);
             }}
           >
             <RotateCcw size={12} /> Clear

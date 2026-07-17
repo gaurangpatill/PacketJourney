@@ -46,9 +46,14 @@ export function SiteHeader() {
             </NavLink>
           ))}
         </nav>
-        <button className="user-button" type="button" aria-label="Open user menu">
+        <button
+          className="user-button"
+          type="button"
+          aria-label="Anonymous browser installation"
+          title="Saved history belongs to this browser installation; no account is signed in."
+        >
           <UserRound size={15} />
-          <span>GP</span>
+          <span>Local</span>
         </button>
       </div>
     </header>

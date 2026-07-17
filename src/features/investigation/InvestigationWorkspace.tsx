@@ -3,9 +3,9 @@ import {
   Check,
   ChevronRight,
   Clock3,
+  Database,
   Download,
   Info,
-  Link2,
   MoreHorizontal,
   Search,
   ShieldCheck,
@@ -26,6 +26,10 @@ import { BrowserEvidencePanels } from "./BrowserEvidencePanels";
 import { AiInvestigationPanel } from "./AiInvestigationPanel";
 import type { AiDiagnosis } from "./aiSchema";
 import { CounterfactualWorkspace } from "../counterfactual/CounterfactualWorkspace";
+import type { CounterfactualResult } from "../counterfactual/schemas";
+import { CounterfactualComparison } from "../counterfactual/CounterfactualComparison";
+import { SaveInvestigationDialog } from "../persistence/SaveInvestigationDialog";
+import type { SelectedDiagnosis } from "../persistence/schema";
 
 const expertiseCopy: Record<ExpertiseMode, { label: string; intro: string }> = {
   beginner: {
@@ -55,13 +59,30 @@ function Metric({ label, value, note }: { label: string; value: string; note: st
 export function InvestigationWorkspace({
   investigation,
   partialError,
+  snapshot,
+  persistedDiagnosis,
+  persistedCounterfactual,
 }: {
   investigation: Investigation;
   partialError?: InvestigationApiError;
+  snapshot?: {
+    kind: "saved" | "shared";
+    capturedAt: string;
+    freshnessNotice: string;
+    title?: string;
+  };
+  persistedDiagnosis?: SelectedDiagnosis;
+  persistedCounterfactual?: CounterfactualResult;
 }) {
   const hasBrowserEvidence = investigation.stages.some((stage) => stage.id === "browser-complete");
   const [expertise, setExpertise] = useState<ExpertiseMode>("developer");
-  const [aiDiagnosis, setAiDiagnosis] = useState<AiDiagnosis>();
+  const [aiDiagnosis, setAiDiagnosis] = useState<AiDiagnosis | undefined>(
+    persistedDiagnosis?.diagnosis,
+  );
+  const [selectedCounterfactual, setSelectedCounterfactual] = useState<
+    CounterfactualResult | undefined
+  >(persistedCounterfactual);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [activeDetail, setActiveDetail] = useState<
     "overview" | "dns" | "tls" | "cache" | "browser"
   >("overview");
@@ -96,20 +117,20 @@ export function InvestigationWorkspace({
               ))}
             </select>
           </label>
+          {!snapshot ? (
+            <button
+              className="button button--secondary workspace-save"
+              type="button"
+              onClick={() => setShowSaveDialog(true)}
+            >
+              <Database size={15} /> Save
+            </button>
+          ) : null}
           <button
             className="icon-button"
             type="button"
-            aria-label="Share is available in Layer 9"
-            title="Available in Layer 9"
-            disabled
-          >
-            <Link2 size={16} />
-          </button>
-          <button
-            className="icon-button"
-            type="button"
-            aria-label="Export is available in Layer 9"
-            title="Available in Layer 9"
+            aria-label="Export is not available for this snapshot"
+            title="Export is not available yet"
             disabled
           >
             <Download size={16} />
@@ -120,9 +141,19 @@ export function InvestigationWorkspace({
         </div>
       </header>
 
-      <div className={`mock-banner${investigation.mock ? "" : " mock-banner--live"}`} role="note">
+      <div
+        className={`mock-banner${investigation.mock ? "" : " mock-banner--live"}${snapshot ? " mock-banner--snapshot" : ""}`}
+        role="note"
+      >
         <Info size={14} />
-        {investigation.mock ? (
+        {snapshot ? (
+          <span>
+            <strong>
+              {snapshot.kind === "shared" ? "SAVED SNAPSHOT · READ ONLY" : "SAVED INVESTIGATION"}
+            </strong>{" "}
+            Captured {new Date(snapshot.capturedAt).toLocaleString()}. {snapshot.freshnessNotice}
+          </span>
+        ) : investigation.mock ? (
           <span>
             <strong>Recorded example</strong> Stable fixture evidence for repeatable product demos.
           </span>
@@ -207,30 +238,68 @@ export function InvestigationWorkspace({
         />
       </section>
 
-      <AiInvestigationPanel
-        investigation={investigation}
-        expertise={expertise}
-        selectedStageId={controller.selectedNodeId}
-        onDiagnosis={(diagnosis) => {
-          setAiDiagnosis(diagnosis);
-          if (diagnosis.graphInstructions.selectedStageId) {
-            controller.selectNode(diagnosis.graphInstructions.selectedStageId);
-          }
-        }}
-        onEvidenceReference={(stageId, evidenceId) => {
-          controller.selectNode(stageId);
-          window.setTimeout(() => {
-            document
-              .querySelector(`[data-evidence-id="${CSS.escape(evidenceId)}"]`)
-              ?.scrollIntoView({
-                behavior: reducedMotion ? "auto" : "smooth",
-                block: "nearest",
-              });
-          }, 0);
-        }}
-      />
+      {snapshot ? (
+        persistedDiagnosis ? (
+          <section className="snapshot-diagnosis section-shell panel">
+            <p className="panel-kicker">SAVED AI DIAGNOSIS · {persistedDiagnosis.expertiseMode}</p>
+            <h2>{persistedDiagnosis.diagnosis.summary}</h2>
+            <p>{persistedDiagnosis.diagnosis.answer}</p>
+            <small>
+              Confidence {Math.round(persistedDiagnosis.diagnosis.confidence * 100)}% · Generated{" "}
+              {new Date(persistedDiagnosis.diagnosis.generatedAt).toLocaleString()} · Evidence
+              references preserved
+            </small>
+          </section>
+        ) : null
+      ) : (
+        <AiInvestigationPanel
+          investigation={investigation}
+          expertise={expertise}
+          selectedStageId={controller.selectedNodeId}
+          onDiagnosis={(diagnosis) => {
+            setAiDiagnosis(diagnosis);
+            if (diagnosis.graphInstructions.selectedStageId) {
+              controller.selectNode(diagnosis.graphInstructions.selectedStageId);
+            }
+          }}
+          onEvidenceReference={(stageId, evidenceId) => {
+            controller.selectNode(stageId);
+            window.setTimeout(() => {
+              document
+                .querySelector(`[data-evidence-id="${CSS.escape(evidenceId)}"]`)
+                ?.scrollIntoView({
+                  behavior: reducedMotion ? "auto" : "smooth",
+                  block: "nearest",
+                });
+            }, 0);
+          }}
+        />
+      )}
 
-      <CounterfactualWorkspace investigation={investigation} expertise={expertise} />
+      {snapshot ? (
+        persistedCounterfactual ? (
+          <section className="section-shell snapshot-counterfactual">
+            <p className="panel-kicker">SAVED DETERMINISTIC SIMULATION</p>
+            <CounterfactualComparison result={persistedCounterfactual} expertise={expertise} />
+          </section>
+        ) : null
+      ) : (
+        <CounterfactualWorkspace
+          investigation={investigation}
+          expertise={expertise}
+          onResult={setSelectedCounterfactual}
+        />
+      )}
+
+      {showSaveDialog ? (
+        <SaveInvestigationDialog
+          investigation={investigation}
+          diagnosis={aiDiagnosis}
+          expertiseMode={expertise === "engineer" ? "network-engineer" : expertise}
+          counterfactual={selectedCounterfactual}
+          onClose={() => setShowSaveDialog(false)}
+        />
+      ) : null}
 
       <section className="analysis-section section-shell">
         <div className="detail-tabs" role="tablist" aria-label="Investigation details">
