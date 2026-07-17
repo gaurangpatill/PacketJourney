@@ -5,6 +5,7 @@ import {
   investigationErrorResponseSchema,
 } from "../features/investigation/httpApi";
 import type { AddressResolver, DnsQueryClient, DnsRecordType } from "./security/dns";
+import type { BrowserDiagnosticResult, BrowserInvestigator } from "./browser/types";
 import { createRouter } from "./router";
 
 const endpoint = "https://api.packetjourney.example/api/v1/investigations/http";
@@ -24,6 +25,54 @@ class MissingDnsClient implements DnsQueryClient {
       collectedAt: "2026-07-16T12:00:00.000Z",
       durationMs: 1,
       source: "Fixture resolver",
+    });
+  }
+}
+
+class FixtureBrowserInvestigator implements BrowserInvestigator {
+  readonly calls: string[] = [];
+
+  investigate(url: string): Promise<BrowserDiagnosticResult> {
+    this.calls.push(url);
+    return Promise.resolve({
+      status: "success",
+      requestedUrl: url,
+      finalUrl: url,
+      title: "Fixture browser page",
+      mainDocumentStatus: 200,
+      mainDocumentContentType: "text/html",
+      redirectCount: 0,
+      readiness: "loaded",
+      viewport: { width: 1440, height: 900, deviceScaleFactor: 1 },
+      navigation: { domContentLoadedMs: 200, loadEventMs: 300, firstContentfulPaintMs: 180 },
+      resources: [],
+      resourceSummary: {
+        totalObserved: 0,
+        retained: 0,
+        truncated: false,
+        firstPartyCount: 0,
+        thirdPartyCount: 0,
+        failedCount: 0,
+        domains: 0,
+      },
+      console: [],
+      consoleTruncated: false,
+      blockedRequests: [],
+      artifact: {
+        id: "123e4567-e89b-42d3-a456-426614174000",
+        type: "screenshot",
+        label: "Rendered page screenshot",
+        storage: "r2",
+        contentType: "image/jpeg",
+        sizeBytes: 3,
+        access: "worker-mediated",
+        url: "/api/v1/artifacts/screenshots/123e4567-e89b-42d3-a456-426614174000",
+      },
+      errors: [],
+      limitations: ["Fixture browser session."],
+      startedAt: "2026-07-17T12:00:00.000Z",
+      completedAt: "2026-07-17T12:00:01.000Z",
+      durationMs: 1_000,
     });
   }
 }
@@ -74,6 +123,70 @@ describe("POST /api/v1/investigations/http", () => {
         .parse(payload)
         .investigation.stages.find((stage) => stage.type === "tls"),
     ).toMatchObject({ status: "warning" });
+  });
+
+  it("returns browser evidence through the existing canonical endpoint", async () => {
+    const browser = new FixtureBrowserInvestigator();
+    const router = createRouter({
+      resolver: new PublicResolver(),
+      targetFetch: vi
+        .fn()
+        .mockResolvedValue(
+          new Response(null, { status: 200, headers: { "content-type": "text/html" } }),
+        ),
+      browserInvestigator: browser,
+      investigationId: () => "browser-api-test",
+    });
+    const response = await router(investigationRequest("https://example.com"), {
+      ENVIRONMENT: "test",
+    });
+    const payload = httpInvestigationResponseSchema.parse(await response.json());
+
+    expect(response.status).toBe(200);
+    expect(browser.calls).toEqual(["https://example.com/"]);
+    expect(payload.investigation.stages).toContainEqual(
+      expect.objectContaining({ id: "browser-investigation", type: "browser" }),
+    );
+    expect(payload.investigation.metrics).toMatchObject({
+      browserDurationMs: 1_000,
+      firstContentfulPaintMs: 180,
+    });
+    expect(payload.investigation.artifacts).toEqual([
+      expect.objectContaining({ storage: "r2", access: "worker-mediated", sizeBytes: 3 }),
+    ]);
+    expect(JSON.stringify(payload)).not.toContain("browser-screenshots/");
+  });
+
+  it("returns an explicit unavailable stage when browser collection is disabled", async () => {
+    const limit = vi.fn();
+    const router = createRouter({
+      resolver: new PublicResolver(),
+      targetFetch: vi
+        .fn()
+        .mockResolvedValue(
+          new Response(null, { status: 200, headers: { "content-type": "text/html" } }),
+        ),
+    });
+    const response = await router(investigationRequest("https://example.com"), {
+      ENVIRONMENT: "test",
+      BROWSER: { fetch: vi.fn(), connect: vi.fn() },
+      BROWSER_ENABLED: "false",
+      BROWSER_INVESTIGATION_RATE_LIMITER: { limit },
+    });
+    const payload = httpInvestigationResponseSchema.parse(await response.json());
+
+    expect(response.status).toBe(200);
+    expect(payload.investigation.stages).toContainEqual(
+      expect.objectContaining({
+        id: "browser-investigation",
+        title: "Browser investigation unavailable",
+        status: "warning",
+      }),
+    );
+    expect(payload.investigation.stages.some((stage) => stage.id === "browser-complete")).toBe(
+      false,
+    );
+    expect(limit).not.toHaveBeenCalled();
   });
 
   it("rejects malformed JSON and invalid request bodies", async () => {
@@ -233,5 +346,26 @@ describe("POST /api/v1/investigations/http", () => {
       key: "/api/v1/investigations/http:unidentified-client",
     });
     expect(targetFetch).not.toHaveBeenCalled();
+  });
+
+  it("applies a stricter browser rate limit before launching expensive work", async () => {
+    const browser = new FixtureBrowserInvestigator();
+    const targetFetch = vi.fn();
+    const limit = vi.fn().mockResolvedValue({ success: false });
+    const router = createRouter({
+      resolver: new PublicResolver(),
+      targetFetch,
+      browserInvestigator: browser,
+    });
+    const response = await router(investigationRequest("https://example.com"), {
+      BROWSER_INVESTIGATION_RATE_LIMITER: { limit },
+    });
+
+    expect(response.status).toBe(429);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "browser_rate_limited", retryable: true },
+    });
+    expect(targetFetch).not.toHaveBeenCalled();
+    expect(browser.calls).toHaveLength(0);
   });
 });

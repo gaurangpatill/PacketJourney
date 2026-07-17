@@ -4,6 +4,7 @@ import { investigationSchema } from "../../features/investigation/schema";
 import type { CertificateDiagnosticResult, CertificateEvidence } from "../diagnostics/certificate";
 import type { DnsDiagnosticResult } from "../diagnostics/dns";
 import type { HttpDiagnosticResult, NetworkDiagnosticResult } from "../diagnostics/types";
+import type { BrowserDiagnosticResult } from "../browser/types";
 import {
   adaptHttpDiagnosticToInvestigation,
   adaptNetworkDiagnosticToInvestigation,
@@ -138,6 +139,94 @@ function network(
     startedAt,
     completedAt,
     totalDurationMs: 140,
+    ...overrides,
+  };
+}
+
+function browserResult(overrides: Partial<BrowserDiagnosticResult> = {}): BrowserDiagnosticResult {
+  return {
+    status: "success",
+    requestedUrl: "https://example.com/",
+    finalUrl: "https://example.com/",
+    title: "Example",
+    mainDocumentStatus: 200,
+    mainDocumentContentType: "text/html",
+    redirectCount: 0,
+    readiness: "loaded",
+    viewport: { width: 1440, height: 900, deviceScaleFactor: 1 },
+    navigation: {
+      timeToFirstByteMs: 100,
+      domContentLoadedMs: 300,
+      loadEventMs: 500,
+      firstContentfulPaintMs: 200,
+    },
+    resources: [
+      {
+        id: "script",
+        url: "https://example.com/app.js",
+        origin: "https://example.com",
+        hostname: "example.com",
+        type: "script",
+        method: "GET",
+        status: 200,
+        transferSize: 20_000,
+        startTimeMs: 100,
+        durationMs: 80,
+        firstParty: true,
+        classificationBasis: "fixture",
+        failed: false,
+        renderBlockingCandidate: false,
+      },
+      {
+        id: "analytics",
+        url: "https://www.google-analytics.com/collect",
+        origin: "https://www.google-analytics.com",
+        hostname: "www.google-analytics.com",
+        type: "fetch",
+        method: "POST",
+        status: 204,
+        transferSize: 1_000,
+        startTimeMs: 250,
+        durationMs: 60,
+        firstParty: false,
+        classificationBasis: "fixture",
+        thirdPartyCategory: "analytics",
+        failed: false,
+        renderBlockingCandidate: false,
+      },
+    ],
+    resourceSummary: {
+      totalObserved: 2,
+      retained: 2,
+      truncated: false,
+      firstPartyCount: 1,
+      thirdPartyCount: 1,
+      failedCount: 0,
+      totalTransferBytes: 21_000,
+      javascriptTransferBytes: 20_000,
+      thirdPartyTransferBytes: 1_000,
+      domains: 2,
+    },
+    console: [],
+    consoleTruncated: false,
+    blockedRequests: [],
+    artifact: {
+      id: "123e4567-e89b-42d3-a456-426614174000",
+      type: "screenshot",
+      label: "Rendered page screenshot",
+      storage: "r2",
+      contentType: "image/jpeg",
+      sizeBytes: 3,
+      createdAt: completedAt,
+      expiresAt: "2026-07-18T20:00:00.000Z",
+      access: "worker-mediated",
+      url: "/api/v1/artifacts/screenshots/123e4567-e89b-42d3-a456-426614174000",
+    },
+    errors: [],
+    limitations: ["Fixture lab session."],
+    startedAt,
+    completedAt,
+    durationMs: 900,
     ...overrides,
   };
 }
@@ -455,5 +544,106 @@ describe("DNS and TLS investigation adapter", () => {
       }),
     ]);
     expect(investigation.stages.find((stage) => stage.type === "tls")?.status).toBe("warning");
+  });
+});
+
+describe("browser investigation adapter", () => {
+  it("adds a primary browser path and bounded resource branches", () => {
+    const investigation = adaptNetworkDiagnosticToInvestigation(
+      network(diagnostic(), { browser: browserResult(), totalDurationMs: 1_040 }),
+      { id: "browser-success" },
+    );
+
+    expect(investigationSchema.safeParse(investigation).success).toBe(true);
+    expect(investigation.stages.map((stage) => stage.id)).toEqual(
+      expect.arrayContaining([
+        "document-received",
+        "browser-investigation",
+        "browser-complete",
+        "browser-group-1",
+        "browser-group-2",
+      ]),
+    );
+    const browser = investigation.stages.find((stage) => stage.id === "browser-investigation");
+    expect(browser?.connections).toEqual(
+      expect.arrayContaining(["browser-complete", "browser-group-1", "browser-group-2"]),
+    );
+    expect(investigation.stages.filter((stage) => stage.type === "third-party")).toHaveLength(1);
+    expect(investigation.metrics).toMatchObject({
+      browserDurationMs: 900,
+      firstContentfulPaintMs: 200,
+      requestCount: 2,
+      thirdPartyCount: 1,
+      transferredBytes: 21_000,
+    });
+    expect(investigation.artifacts).toHaveLength(1);
+  });
+
+  it("preserves HTTP evidence when the browser binding is unavailable", () => {
+    const unavailable = browserResult({
+      status: "unavailable",
+      readiness: "unavailable",
+      resources: [],
+      resourceSummary: {
+        totalObserved: 0,
+        retained: 0,
+        truncated: false,
+        firstPartyCount: 0,
+        thirdPartyCount: 0,
+        failedCount: 0,
+        domains: 0,
+      },
+      artifact: undefined,
+      errors: [
+        {
+          code: "browser_binding_unavailable",
+          message: "Browser binding unavailable.",
+          retryable: false,
+          phase: "binding",
+        },
+      ],
+    });
+    const investigation = adaptNetworkDiagnosticToInvestigation(
+      network(diagnostic(), { browser: unavailable }),
+      { id: "browser-unavailable" },
+    );
+
+    expect(investigation.status).toBe("completed");
+    expect(investigation.stages.find((stage) => stage.id === "http-response")).toBeDefined();
+    expect(
+      investigation.stages.find((stage) => stage.id === "browser-investigation"),
+    ).toMatchObject({ status: "warning", title: "Browser investigation unavailable" });
+    expect(investigation.stages.some((stage) => stage.id === "browser-complete")).toBe(false);
+    expect(investigation.findings).toContainEqual(
+      expect.objectContaining({ id: "finding-browser-unavailable", severity: "info" }),
+    );
+  });
+
+  it("retains partial resources and screenshot state after a browser timeout", () => {
+    const partial = browserResult({
+      status: "partial",
+      readiness: "partial",
+      errors: [
+        {
+          code: "browser_navigation_timeout",
+          message: "Navigation timed out.",
+          retryable: true,
+          phase: "navigation",
+        },
+      ],
+    });
+    const investigation = adaptNetworkDiagnosticToInvestigation(
+      network(diagnostic(), { browser: partial }),
+      { id: "browser-timeout" },
+    );
+
+    expect(investigation.status).toBe("completed");
+    expect(investigation.stages.find((stage) => stage.id === "browser-investigation")?.status).toBe(
+      "warning",
+    );
+    expect(investigation.artifacts).toHaveLength(1);
+    expect(investigation.findings.map((finding) => finding.id)).toEqual(
+      expect.arrayContaining(["finding-browser-timeout", "finding-browser-partial-screenshot"]),
+    );
   });
 });

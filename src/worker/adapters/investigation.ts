@@ -19,6 +19,8 @@ import {
   type DnsFindingEvidence,
 } from "../findings/dnsTlsFindings";
 import { createHttpFindings, type HttpFindingEvidence } from "../findings/httpFindings";
+import type { BrowserDiagnosticResult, BrowserResource } from "../browser/types";
+import { createBrowserFindings, type BrowserFindingEvidence } from "../findings/browserFindings";
 
 export interface InvestigationAdapterOptions {
   id?: string;
@@ -184,6 +186,231 @@ function responseDescription(hasEdge: boolean, inferredEdge: boolean): string {
 }
 
 const findingSeverityOrder = { high: 0, medium: 1, low: 2, info: 3 } as const;
+
+function browserResourceBranchStages(
+  browser: BrowserDiagnosticResult,
+  parentId: string,
+): JourneyStage[] {
+  const groups = new Map<
+    string,
+    { type: "resource" | "third-party"; title: string; resources: BrowserResource[] }
+  >();
+  for (const resource of browser.resources) {
+    const key = resource.firstParty
+      ? `resource:${resource.type}`
+      : `third-party:${resource.thirdPartyCategory ?? "unknown"}`;
+    const title = resource.firstParty
+      ? `${resource.type} resources`
+      : `${resource.thirdPartyCategory ?? "unknown"} dependencies`;
+    const group = groups.get(key) ?? {
+      type: resource.firstParty ? ("resource" as const) : ("third-party" as const),
+      title,
+      resources: [],
+    };
+    group.resources.push(resource);
+    groups.set(key, group);
+  }
+  return [...groups.entries()]
+    .sort(
+      (left, right) =>
+        right[1].resources.length - left[1].resources.length || left[0].localeCompare(right[0]),
+    )
+    .slice(0, 12)
+    .map(([key, group], index) => {
+      const id = `browser-group-${index + 1}`;
+      const failed = group.resources.filter((resource) => resource.failed).length;
+      const bytes = group.resources.reduce(
+        (total, resource) => total + (resource.transferSize ?? 0),
+        0,
+      );
+      return {
+        id,
+        type: group.type,
+        title: group.title,
+        shortTitle: `${group.resources.length} ${group.title}`,
+        description: `${group.resources.length} retained request${group.resources.length === 1 ? "" : "s"}${bytes > 0 ? ` · ${Math.round(bytes / 1_000)} kB` : ""}${failed > 0 ? ` · ${failed} failed` : ""}.`,
+        status: failed > 0 ? "warning" : "success",
+        completedAt: browser.completedAt,
+        evidence: [
+          evidence(
+            `${id}-group-key`,
+            "Resource group",
+            key,
+            "Deterministic browser resource aggregation",
+            browser.completedAt,
+            group.type === "third-party" ? "inferred" : "verified",
+          ),
+          evidence(
+            `${id}-resources`,
+            "Grouped resources",
+            group.resources,
+            "Cloudflare Browser Run resource and performance events",
+            browser.completedAt,
+          ),
+          evidence(
+            `${id}-parent`,
+            "Browser relationship",
+            parentId,
+            "Canonical browser branch adapter",
+            browser.completedAt,
+            "inferred",
+          ),
+        ],
+        connections: [],
+        branch: index + 1,
+      } satisfies JourneyStage;
+    });
+}
+
+function browserStages(browser: BrowserDiagnosticResult): {
+  core: JourneyStage[];
+  branches: JourneyStage[];
+  findingEvidence: BrowserFindingEvidence;
+} {
+  const statusId = "browser-status";
+  const navigationId = "browser-navigation";
+  const resourceSummaryId = "browser-resource-summary";
+  const resourcesId = "browser-resources";
+  const consoleId = "browser-console";
+  const errorsId = "browser-errors";
+  const screenshotId = browser.artifact ? "browser-screenshot" : undefined;
+  const stageEvidence = [
+    evidence(
+      statusId,
+      "Browser investigation status",
+      { status: browser.status, readiness: browser.readiness },
+      "Cloudflare Browser Run investigation state machine",
+      browser.completedAt,
+    ),
+    evidence(
+      navigationId,
+      "Browser navigation",
+      {
+        requestedUrl: browser.requestedUrl,
+        finalUrl: browser.finalUrl ?? "unavailable",
+        title: browser.title ?? "unavailable",
+        mainDocumentStatus: browser.mainDocumentStatus ?? "unavailable",
+        mainDocumentContentType: browser.mainDocumentContentType ?? "unavailable",
+        redirectCount: browser.redirectCount,
+        viewport: browser.viewport,
+        metrics: browser.navigation,
+      },
+      "Cloudflare Browser Run page navigation and Performance API",
+      browser.completedAt,
+    ),
+    evidence(
+      resourceSummaryId,
+      "Browser resource summary",
+      browser.resourceSummary,
+      "Deterministic aggregation of Browser Run resource evidence",
+      browser.completedAt,
+      "inferred",
+    ),
+    evidence(
+      resourcesId,
+      "Browser resources",
+      browser.resources,
+      "Cloudflare Browser Run request, response, failure, and Resource Timing evidence",
+      browser.completedAt,
+    ),
+    evidence(
+      consoleId,
+      "Browser console errors and warnings",
+      { entries: browser.console, truncated: browser.consoleTruncated },
+      "Cloudflare Browser Run console and page-error events",
+      browser.completedAt,
+    ),
+    evidence(
+      "browser-blocked-requests",
+      "Browser requests blocked by safety policy",
+      browser.blockedRequests,
+      "Packet Journey browser navigation and subresource policy",
+      browser.completedAt,
+    ),
+    evidence(
+      errorsId,
+      "Browser diagnostic errors",
+      browser.errors,
+      "Cloudflare Browser Run diagnostic state machine",
+      browser.completedAt,
+    ),
+    evidence(
+      "browser-limitations",
+      "Browser evidence limitations",
+      browser.limitations,
+      "Browser diagnostic capability boundary",
+      browser.completedAt,
+    ),
+  ];
+  if (browser.artifact && screenshotId) {
+    stageEvidence.push(
+      evidence(
+        screenshotId,
+        "Screenshot artifact",
+        browser.artifact,
+        "Private R2 object metadata",
+        browser.completedAt,
+      ),
+    );
+  }
+  const unavailable = browser.status === "unavailable";
+  const failed = browser.status === "error";
+  const navigationStage: JourneyStage = {
+    id: "browser-investigation",
+    type: "browser",
+    title: unavailable ? "Browser investigation unavailable" : "Browser navigation and rendering",
+    shortTitle: unavailable ? "Browser unavailable" : "Browser render",
+    description: unavailable
+      ? (browser.errors[0]?.message ?? "Browser evidence was unavailable.")
+      : `One isolated lab browser session reached ${browser.readiness.replaceAll("-", " ")} and retained ${browser.resourceSummary.retained} resource records.`,
+    status: failed ? "error" : browser.status === "partial" || unavailable ? "warning" : "success",
+    startedAt: browser.startedAt,
+    completedAt: browser.completedAt,
+    durationMs: browser.durationMs,
+    evidence: stageEvidence,
+    connections: [],
+    branch: 0,
+  };
+  const core = [navigationStage];
+  if (!unavailable && !failed) {
+    core.push({
+      id: "browser-complete",
+      type: "browser",
+      title: "Browser evidence collected",
+      shortTitle: "Browser complete",
+      description: browser.artifact
+        ? "Browser evidence and a private screenshot artifact were collected."
+        : "Browser evidence was collected without a screenshot artifact.",
+      status: browser.status === "partial" ? "warning" : "success",
+      completedAt: browser.completedAt,
+      evidence: [
+        evidence(
+          "browser-completion-readiness",
+          "Completion state",
+          browser.readiness,
+          "Cloudflare Browser Run investigation state machine",
+          browser.completedAt,
+        ),
+      ],
+      connections: [],
+      branch: 0,
+    });
+  }
+  return {
+    core,
+    branches: unavailable || failed ? [] : browserResourceBranchStages(browser, navigationStage.id),
+    findingEvidence: {
+      browser,
+      statusId,
+      navigationId,
+      resourceSummaryId,
+      resourcesId,
+      consoleId,
+      errorsId,
+      ...(screenshotId ? { screenshotId } : {}),
+    },
+  };
+}
 
 function dnsStage(
   result: DnsDiagnosticResult,
@@ -497,6 +724,8 @@ export function adaptHttpDiagnosticToInvestigation(
   const network = options.network;
   const dnsFindingEvidence: DnsFindingEvidence[] = [];
   const certificateFindingEvidence: CertificateFindingEvidence[] = [];
+  let browserFindingEvidence: BrowserFindingEvidence | undefined;
+  let browserBranches: JourneyStage[] = [];
   const dnsEntries =
     network?.dns.map((result, index) => ({ result, ...dnsStage(result, index) })) ?? [];
   const certificateEntries =
@@ -695,17 +924,24 @@ export function adaptHttpDiagnosticToInvestigation(
     }
     stages.push({
       id: "document-received",
-      type: "browser",
-      title: "Document response received",
-      shortTitle: "Document received",
+      type: "origin",
+      title: "Worker document response received",
+      shortTitle: "Worker response",
       description:
-        "The HTTP document response reached Packet Journey. No browser execution or rendering was performed in Layer 4.",
+        "The Worker HTTP collector received the document response. Browser evidence, when available, begins in the next stage.",
       status: response.status >= 400 ? "warning" : "success",
       completedAt: response.collectedAt,
       evidence: checks,
       connections: [],
       branch: 0,
     });
+
+    if (network?.browser) {
+      const adaptedBrowser = browserStages(network.browser);
+      stages.push(...adaptedBrowser.core);
+      browserBranches = adaptedBrowser.branches;
+      browserFindingEvidence = adaptedBrowser.findingEvidence;
+    }
   }
 
   if (diagnostic.error) {
@@ -746,9 +982,15 @@ export function adaptHttpDiagnosticToInvestigation(
   }
 
   connectStages(stages);
+  if (browserBranches.length > 0) {
+    const browserStage = stages.find((stage) => stage.id === "browser-investigation");
+    if (browserStage) browserStage.connections.push(...browserBranches.map((stage) => stage.id));
+    stages.push(...browserBranches);
+  }
   const findings = [
     ...createDnsTlsFindings(dnsFindingEvidence, certificateFindingEvidence),
     ...createHttpFindings(diagnostic, cache, security, findingEvidence),
+    ...createBrowserFindings(browserFindingEvidence),
   ].sort(
     (left, right) => findingSeverityOrder[left.severity] - findingSeverityOrder[right.severity],
   );
@@ -761,7 +1003,7 @@ export function adaptHttpDiagnosticToInvestigation(
     title: `${network ? "Network" : "HTTP"} journey for ${host}`,
     summary: diagnostic.error
       ? `The Worker preserved ${network?.dns.length ?? 0} DNS result${network?.dns.length === 1 ? "" : "s"} and ${diagnostic.redirects.length} redirect hop${diagnostic.redirects.length === 1 ? "" : "s"} before the investigation stopped.`
-      : `The Worker observed ${network?.dns.length ?? 0} DNS result${network?.dns.length === 1 ? "" : "s"}, ${network?.certificates.length ?? 0} certificate probe${network?.certificates.length === 1 ? "" : "s"}, ${diagnostic.redirects.length} redirect hop${diagnostic.redirects.length === 1 ? "" : "s"}, and HTTP ${diagnostic.finalResponse?.status ?? "unknown"}.`,
+      : `The Worker observed ${network?.dns.length ?? 0} DNS result${network?.dns.length === 1 ? "" : "s"}, ${network?.certificates.length ?? 0} certificate probe${network?.certificates.length === 1 ? "" : "s"}, ${diagnostic.redirects.length} redirect hop${diagnostic.redirects.length === 1 ? "" : "s"}, HTTP ${diagnostic.finalResponse?.status ?? "unknown"}, and ${network?.browser?.status === "success" || network?.browser?.status === "partial" ? "one browser lab session" : "no completed browser session"}.`,
     scenario: "live-http",
     url: diagnostic.normalizedUrl.canonicalUrl,
     normalizedUrl: diagnostic.normalizedUrl.canonicalUrl,
@@ -779,11 +1021,35 @@ export function adaptHttpDiagnosticToInvestigation(
           }
         : {}),
       requestCount: diagnostic.redirects.length + (diagnostic.finalResponse ? 1 : 0),
-      ...(Number.isFinite(contentLength) && contentLength >= 0
+      ...(network?.browser
+        ? {
+            browserDurationMs: network.browser.durationMs,
+            requestCount: network.browser.resourceSummary.totalObserved,
+            thirdPartyCount: network.browser.resourceSummary.thirdPartyCount,
+            ...(network.browser.navigation.firstContentfulPaintMs === undefined
+              ? {}
+              : { firstContentfulPaintMs: network.browser.navigation.firstContentfulPaintMs }),
+            ...(network.browser.navigation.domContentLoadedMs === undefined
+              ? {}
+              : { domContentLoadedMs: network.browser.navigation.domContentLoadedMs }),
+            ...(network.browser.navigation.loadEventMs === undefined
+              ? {}
+              : { loadEventMs: network.browser.navigation.loadEventMs }),
+            ...(network.browser.navigation.largestContentfulPaintMs === undefined
+              ? {}
+              : { largestContentfulPaintMs: network.browser.navigation.largestContentfulPaintMs }),
+            ...(network.browser.resourceSummary.totalTransferBytes === undefined
+              ? {}
+              : { transferredBytes: network.browser.resourceSummary.totalTransferBytes }),
+          }
+        : {}),
+      ...(network?.browser?.resourceSummary.totalTransferBytes === undefined &&
+      Number.isFinite(contentLength) &&
+      contentLength >= 0
         ? { transferredBytes: contentLength }
         : {}),
     },
-    artifacts: [],
+    artifacts: network?.browser?.artifact ? [network.browser.artifact] : [],
     mock: false,
   };
 

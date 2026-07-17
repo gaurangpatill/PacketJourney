@@ -68,6 +68,39 @@ describe("buildInvestigationGraph", () => {
     expect(graph.edges.some((edge) => edge.relationship === "resource")).toBe(true);
   });
 
+  it("keeps browser completion primary while resource groups branch secondarily", () => {
+    const template = getInvestigation("fast-cached").stages[0]!;
+    const stages: JourneyStage[] = [
+      { ...template, id: "input", type: "input", connections: ["browser"] },
+      {
+        ...template,
+        id: "browser",
+        type: "browser",
+        connections: ["browser-complete", "scripts", "analytics"],
+      },
+      {
+        ...template,
+        id: "browser-complete",
+        type: "browser",
+        connections: [],
+      },
+      { ...template, id: "scripts", type: "resource", branch: 1, connections: [] },
+      { ...template, id: "analytics", type: "third-party", branch: 2, connections: [] },
+    ];
+    const graph = buildInvestigationGraph({
+      stages,
+      findings: [],
+      metrics: { totalDurationMs: 100 },
+    });
+
+    expect(graph.primaryNodeIds).toEqual(["input", "browser", "browser-complete"]);
+    expect(graph.nodes.find((node) => node.id === "scripts")?.path).toBe("secondary");
+    expect(graph.edges.find((edge) => edge.targetId === "scripts")?.relationship).toBe("resource");
+    expect(graph.edges.find((edge) => edge.targetId === "analytics")?.relationship).toBe(
+      "inferred",
+    );
+  });
+
   it("ignores malformed connections and duplicate stage IDs defensively", () => {
     const baseStage = getInvestigation("fast-cached").stages[0]!;
     const source = {
