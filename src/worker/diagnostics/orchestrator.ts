@@ -1,4 +1,5 @@
 import type { RuntimeLimits } from "../env";
+import type { BrowserDiagnosticResult, BrowserInvestigator } from "../browser/types";
 import {
   CachingDnsQueryClient,
   DnsQueryAddressResolver,
@@ -16,6 +17,7 @@ import type { HttpDiagnosticResult, NetworkDiagnosticResult } from "./types";
 export interface NetworkInvestigationDependencies {
   dnsClient: DnsQueryClient;
   certificateInspector: CertificateInspector;
+  browserInvestigator?: BrowserInvestigator;
   resolver?: AddressResolver;
   fetcher?: DiagnosticFetch;
   monotonicNow?: () => number;
@@ -168,6 +170,7 @@ export async function investigateNetworkJourney(
   const resolver = dependencies.resolver ?? new DnsQueryAddressResolver(client);
   const dns: DnsDiagnosticResult[] = [];
   const certificates: NetworkDiagnosticResult["certificates"] = [];
+  let browser: BrowserDiagnosticResult | undefined;
   const initialTarget: HostTarget = {
     hostname: normalizedUrl.hostname,
     protocol: normalizedUrl.protocol,
@@ -241,11 +244,16 @@ export async function investigateNetworkJourney(
     await inspectCertificate(target, result);
   }
 
+  if (http.finalResponse && dependencies.browserInvestigator) {
+    browser = await dependencies.browserInvestigator.investigate(http.finalResponse.url);
+  }
+
   const completedAt = wallClockNow().toISOString();
   return {
     http,
     dns,
     certificates,
+    ...(browser ? { browser } : {}),
     startedAt,
     completedAt,
     totalDurationMs: roundedDuration(startedTick, monotonicNow()),

@@ -1,4 +1,6 @@
 ENVIRONMENT=development
 CORS_ALLOWED_ORIGINS=http://localhost:5173
+# Set false to exercise the explicit HTTP-only degradation path:
+# BROWSER_ENABLED=false
 # Optional for production-volume Certificate Transparency lookup:
 # CERTSPOTTER_API_TOKEN=

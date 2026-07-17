@@ -49,6 +49,7 @@ export interface NetworkDiagnosticResult {
   http: HttpDiagnosticResult;
   dns: import("./dns").DnsDiagnosticResult[];
   certificates: import("./certificate").CertificateDiagnosticResult[];
+  browser?: import("../browser/types").BrowserDiagnosticResult;
   startedAt: string;
   completedAt: string;
   totalDurationMs: number;

@@ -11,6 +11,13 @@ import {
   UnavailableCertificateInspector,
   WorkerTlsCertificateInspector,
 } from "./diagnostics/certificate";
+import { CloudflareBrowserInvestigator, UnavailableBrowserInvestigator } from "./browser/client";
+import type { BrowserInvestigator } from "./browser/types";
+import {
+  R2BrowserArtifactStore,
+  retrieveScreenshotArtifact,
+  UnavailableBrowserArtifactStore,
+} from "./artifacts/r2";
 import { investigateNetworkJourney } from "./diagnostics/orchestrator";
 import { responseHeaders } from "./cors";
 import type { DiagnosticFetch } from "./diagnostics/redirects";
@@ -37,6 +44,7 @@ export interface RouterDependencies {
   investigationId?: () => string;
   dnsClient?: DnsQueryClient;
   certificateInspector?: CertificateInspector;
+  browserInvestigator?: BrowserInvestigator;
 }
 
 function requestError(message: string): WorkerError {
@@ -129,6 +137,36 @@ export function createRouter(dependencies: RouterDependencies = {}) {
       );
     }
 
+    const artifactMatch = url.pathname.match(/^\/api\/v1\/artifacts\/screenshots\/([0-9a-f-]+)$/i);
+    if (artifactMatch) {
+      if (request.method !== "GET" && request.method !== "HEAD") {
+        headers.set("allow", "GET, HEAD, OPTIONS");
+        return errorResponse(
+          {
+            code: "method_not_allowed",
+            message: "Use GET or HEAD to retrieve an artifact.",
+            retryable: false,
+          },
+          405,
+          headers,
+        );
+      }
+      const artifact = await retrieveScreenshotArtifact(
+        env.BROWSER_ARTIFACTS,
+        artifactMatch[1] ?? "",
+      );
+      for (const [name, value] of headers) {
+        if (name.startsWith("access-control-") || name === "vary") {
+          artifact.headers.set(name, value);
+        }
+      }
+      if (request.method === "HEAD") {
+        await artifact.body?.cancel();
+        return new Response(null, { status: artifact.status, headers: artifact.headers });
+      }
+      return artifact;
+    }
+
     if (url.pathname === INVESTIGATION_PATH) {
       if (request.method !== "POST") {
         headers.set("allow", "POST, OPTIONS");
@@ -163,6 +201,29 @@ export function createRouter(dependencies: RouterDependencies = {}) {
           }
         }
 
+        if (
+          env.BROWSER_INVESTIGATION_RATE_LIMITER &&
+          (dependencies.browserInvestigator || (env.BROWSER && env.BROWSER_ENABLED !== "false"))
+        ) {
+          const key = request.headers.get("cf-connecting-ip") ?? "unidentified-client";
+          const rateLimit = await env.BROWSER_INVESTIGATION_RATE_LIMITER.limit({
+            key: `${INVESTIGATION_PATH}:browser:${key}`,
+          });
+          if (!rateLimit.success) {
+            logEvent("warn", "browser.rate_limited");
+            return errorResponse(
+              {
+                code: "browser_rate_limited",
+                message:
+                  "Browser investigation capacity is temporarily limited. Try again shortly.",
+                retryable: true,
+              },
+              429,
+              headers,
+            );
+          }
+        }
+
         const body = await readRequestBody(request);
         const parsedRequest = createHttpInvestigationRequestSchema.safeParse(body);
         if (!parsedRequest.success) {
@@ -185,6 +246,21 @@ export function createRouter(dependencies: RouterDependencies = {}) {
                 new WorkerTlsCertificateInspector(),
                 new CertSpotterCertificateInspector({ apiToken: env.CERTSPOTTER_API_TOKEN }),
               ));
+        const browserInvestigator =
+          dependencies.browserInvestigator ??
+          (env.BROWSER && env.BROWSER_ENABLED !== "false"
+            ? new CloudflareBrowserInvestigator(
+                env.BROWSER,
+                resolver,
+                env.BROWSER_ARTIFACTS
+                  ? new R2BrowserArtifactStore(env.BROWSER_ARTIFACTS)
+                  : new UnavailableBrowserArtifactStore(),
+              )
+            : new UnavailableBrowserInvestigator(
+                env.BROWSER_ENABLED === "false"
+                  ? "Browser investigation is disabled by environment configuration."
+                  : "The Cloudflare Browser Run binding is unavailable in this runtime.",
+              ));
         const diagnostic = await investigateNetworkJourney(
           parsedRequest.data.url,
           readRuntimeLimits(env),
@@ -193,6 +269,7 @@ export function createRouter(dependencies: RouterDependencies = {}) {
             resolver,
             fetcher: dependencies.targetFetch,
             certificateInspector,
+            browserInvestigator,
           },
         );
         const investigation = adaptNetworkDiagnosticToInvestigation(diagnostic, {

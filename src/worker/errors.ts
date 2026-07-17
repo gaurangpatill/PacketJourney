@@ -4,6 +4,7 @@ export type InvestigationErrorCode =
   | "blocked_destination"
   | "method_not_allowed"
   | "rate_limited"
+  | "browser_rate_limited"
   | "not_found"
   | "timeout"
   | "upstream_error"

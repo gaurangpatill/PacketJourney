@@ -63,8 +63,22 @@ export const findingSchema = z.object({
 
 export const artifactReferenceSchema = z.object({
   id: z.string().min(1),
-  type: z.enum(["screenshot", "report", "trace"]),
+  type: z.enum([
+    "screenshot",
+    "resource-manifest",
+    "console-log",
+    "browser-report",
+    "report",
+    "trace",
+  ]),
   label: z.string().min(1),
+  storage: z.enum(["r2"]).optional(),
+  contentType: z.string().min(1).optional(),
+  sizeBytes: z.number().int().nonnegative().optional(),
+  createdAt: z.string().datetime().optional(),
+  expiresAt: z.string().datetime().optional(),
+  access: z.enum(["worker-mediated", "private", "public-demo"]).optional(),
+  description: z.string().min(1).optional(),
   url: z.string().optional(),
 });
 
@@ -74,6 +88,10 @@ export const investigationMetricsSchema = z.object({
   tlsMs: z.number().nonnegative().optional(),
   timeToFirstByteMs: z.number().nonnegative().optional(),
   firstContentfulPaintMs: z.number().nonnegative().optional(),
+  domContentLoadedMs: z.number().nonnegative().optional(),
+  loadEventMs: z.number().nonnegative().optional(),
+  largestContentfulPaintMs: z.number().nonnegative().optional(),
+  browserDurationMs: z.number().nonnegative().optional(),
   transferredBytes: z.number().int().nonnegative().optional(),
   requestCount: z.number().int().nonnegative().optional(),
   thirdPartyCount: z.number().int().nonnegative().optional(),
@@ -165,4 +183,5 @@ export type Investigation = z.infer<typeof investigationSchema>;
 export type JourneyStage = z.infer<typeof journeyStageSchema>;
 export type EvidenceItem = z.infer<typeof evidenceItemSchema>;
 export type Finding = z.infer<typeof findingSchema>;
+export type ArtifactReference = z.infer<typeof artifactReferenceSchema>;
 export type ExpertiseMode = "beginner" | "developer" | "engineer";

@@ -4,9 +4,13 @@ export interface Env {
   HTTP_HOP_TIMEOUT_MS?: string;
   HTTP_OVERALL_TIMEOUT_MS?: string;
   HTTP_INVESTIGATION_RATE_LIMITER?: RateLimit;
+  BROWSER_INVESTIGATION_RATE_LIMITER?: RateLimit;
+  BROWSER?: Fetcher;
+  BROWSER_ARTIFACTS?: R2Bucket;
   DNS_TIMEOUT_MS?: string;
   CERTIFICATE_TIMEOUT_MS?: string;
   CERTSPOTTER_API_TOKEN?: string;
+  BROWSER_ENABLED?: string;
 }
 
 export interface RuntimeLimits {

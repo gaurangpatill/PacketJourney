@@ -2,7 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "packet-journey-api",
   "main": "src/worker/index.ts",
-  "compatibility_date": "2026-07-16",
+  "compatibility_date": "2026-07-17",
   "compatibility_flags": ["nodejs_compat"],
   "observability": {
     "enabled": true,
@@ -15,6 +15,23 @@
         "limit": 20,
         "period": 60,
       },
+    },
+    {
+      "name": "BROWSER_INVESTIGATION_RATE_LIMITER",
+      "namespace_id": "2391003",
+      "simple": {
+        "limit": 3,
+        "period": 60,
+      },
+    },
+  ],
+  "browser": {
+    "binding": "BROWSER",
+  },
+  "r2_buckets": [
+    {
+      "binding": "BROWSER_ARTIFACTS",
+      "bucket_name": "packet-journey-browser-artifacts",
     },
   ],
   "vars": {
@@ -34,6 +51,23 @@
             "limit": 20,
             "period": 60,
           },
+        },
+        {
+          "name": "BROWSER_INVESTIGATION_RATE_LIMITER",
+          "namespace_id": "2391004",
+          "simple": {
+            "limit": 3,
+            "period": 60,
+          },
+        },
+      ],
+      "browser": {
+        "binding": "BROWSER",
+      },
+      "r2_buckets": [
+        {
+          "binding": "BROWSER_ARTIFACTS",
+          "bucket_name": "packet-journey-browser-artifacts-preview",
         },
       ],
     },
