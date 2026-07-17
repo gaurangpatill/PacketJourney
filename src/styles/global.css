@@ -1390,6 +1390,256 @@ a {
   border-radius: 8px;
   background: var(--surface);
 }
+.ai-investigator {
+  margin-top: 14px;
+  padding-top: 18px;
+  padding-bottom: 18px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: linear-gradient(180deg, rgb(255 255 255 / 1.6%), transparent 80%), var(--surface);
+}
+.ai-investigator__heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+.ai-investigator__heading h2 {
+  margin: 4px 0 0;
+  font-size: 15px;
+}
+.ai-investigator__heading > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #98ad9f;
+  font: 8px var(--font-mono);
+  text-transform: uppercase;
+}
+.ai-investigator .command-bar {
+  margin-top: 13px;
+  background: #080c0a;
+}
+.command-bar button:not(:disabled) {
+  color: var(--orange-soft);
+  border-color: rgb(242 126 70 / 35%);
+  cursor: pointer;
+}
+.command-bar button:disabled {
+  opacity: 0.45;
+}
+.ai-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 9px;
+}
+.ai-suggestions button {
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: #95a89e;
+  background: var(--surface-soft);
+  font-size: 9px;
+  cursor: pointer;
+}
+.ai-error {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid rgb(226 106 86 / 25%);
+  color: #d9a59c;
+  font-size: 10px;
+}
+.ai-error span {
+  flex: 1;
+}
+.ai-error button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  color: #e2b3aa;
+  background: transparent;
+  font: 8px var(--font-mono);
+  cursor: pointer;
+}
+.ai-diagnosis {
+  margin-top: 12px;
+  padding: 15px;
+  border: 1px solid rgb(116 170 139 / 22%);
+  border-left: 2px solid #6eaf8c;
+  border-radius: 6px;
+  background: #090e0b;
+}
+.ai-diagnosis.is-inconclusive,
+.ai-diagnosis.is-unsupported {
+  border-left-color: #c39556;
+}
+.ai-diagnosis > header {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  color: #87b99b;
+}
+.ai-diagnosis > header div {
+  flex: 1;
+}
+.ai-diagnosis > header span,
+.ai-diagnosis > header small {
+  color: var(--muted);
+  font: 8px var(--font-mono);
+  text-transform: uppercase;
+}
+.ai-diagnosis > header h3 {
+  margin: 4px 0 0;
+  color: var(--text);
+  font-size: 13px;
+}
+.ai-diagnosis > p {
+  max-width: 840px;
+  margin: 12px 0 0 26px;
+  color: #a8b7af;
+  font-size: 10px;
+  line-height: 1.65;
+}
+.ai-references,
+.ai-uncertainties {
+  display: grid;
+  gap: 6px;
+  margin: 13px 0 0 26px;
+}
+.ai-references > strong,
+.ai-uncertainties > strong {
+  color: #81948a;
+  font: 8px var(--font-mono);
+  text-transform: uppercase;
+}
+.ai-references button {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.25fr) 1fr;
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  text-align: left;
+  color: #a9b8b0;
+  background: var(--surface-soft);
+  cursor: pointer;
+}
+.ai-references code {
+  color: var(--orange-soft);
+  font-size: 8px;
+}
+.ai-references span,
+.ai-uncertainties p,
+.ai-actions span {
+  font-size: 9px;
+  line-height: 1.5;
+}
+.ai-uncertainties p {
+  margin: 0;
+  color: #bba77f;
+}
+.ai-uncertainties p span {
+  color: var(--muted);
+}
+.ai-actions {
+  display: grid;
+  gap: 7px;
+  margin: 13px 0 0 26px;
+  padding: 0;
+  list-style: none;
+}
+.ai-actions li {
+  display: flex;
+  gap: 9px;
+}
+.ai-actions li > b {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  color: var(--orange-soft);
+  font: 8px var(--font-mono);
+}
+.ai-actions li div {
+  display: grid;
+  gap: 2px;
+}
+.ai-actions li div > button {
+  padding: 0;
+  border: 0;
+  text-align: left;
+  color: #bcc8c2;
+  background: transparent;
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.ai-actions span {
+  color: var(--muted);
+}
+.ai-followups {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 14px 0 0 26px;
+}
+.ai-followups > strong {
+  margin-right: 4px;
+  color: #81948a;
+  font: 8px var(--font-mono);
+  text-transform: uppercase;
+}
+.ai-followups button {
+  padding: 5px 7px;
+  border: 1px solid var(--line);
+  color: #91a39a;
+  background: transparent;
+  font-size: 8px;
+  cursor: pointer;
+}
+.graph-node.is-ai-emphasized {
+  outline: 2px solid rgb(102 196 145 / 72%);
+  outline-offset: 3px;
+}
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation: none;
+  }
+}
+@media (max-width: 680px) {
+  .ai-investigator__heading {
+    flex-direction: column;
+  }
+  .ai-investigator__heading > span {
+    align-self: flex-start;
+  }
+  .ai-diagnosis > p,
+  .ai-references,
+  .ai-uncertainties,
+  .ai-actions {
+    margin-left: 0;
+  }
+  .ai-followups {
+    margin-left: 0;
+  }
+  .ai-references button {
+    grid-template-columns: 1fr;
+  }
+}
 .command-bar > svg {
   color: var(--orange-soft);
 }

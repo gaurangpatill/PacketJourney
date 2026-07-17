@@ -12,7 +12,10 @@ function valueText(value: unknown) {
 
 function EvidenceDetail({ item, expertise }: { item: EvidenceItem; expertise: ExpertiseMode }) {
   return (
-    <div className={`evidence-detail evidence-detail--${item.confidence}`}>
+    <div
+      className={`evidence-detail evidence-detail--${item.confidence}`}
+      data-evidence-id={item.id}
+    >
       <div>
         <span>{item.label}</span>
         <strong>{valueText(item.value)}</strong>

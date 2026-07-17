@@ -35,6 +35,8 @@ type JourneyCanvasProps = {
   onSelectNode: (id: string) => void;
   onSelectEdge: (id: string) => void;
   onClearSelection: () => void;
+  emphasizedNodeIds?: ReadonlySet<string>;
+  aiDimmedNodeIds?: ReadonlySet<string>;
 };
 
 export function JourneyCanvas({
@@ -49,6 +51,8 @@ export function JourneyCanvas({
   onSelectNode,
   onSelectEdge,
   onClearSelection,
+  emphasizedNodeIds = new Set(),
+  aiDimmedNodeIds = new Set(),
 }: JourneyCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const panRef = useRef<
@@ -311,8 +315,11 @@ export function JourneyCanvas({
               const visible = visibleNodeIds.has(node.id);
               const selected = selectedNodeId === node.id;
               const dimmed = Boolean(
-                (selectedNodeId && !selected && !directlyRelated.has(node.id)) || selectedEdgeId,
+                (selectedNodeId && !selected && !directlyRelated.has(node.id)) ||
+                selectedEdgeId ||
+                aiDimmedNodeIds.has(node.id),
               );
+              const emphasized = emphasizedNodeIds.has(node.id);
               return (
                 <foreignObject
                   x={node.x}
@@ -325,7 +332,7 @@ export function JourneyCanvas({
                   <button
                     type="button"
                     data-node-id={node.id}
-                    className={`graph-node graph-node--${node.stage.type} is-${node.stage.status}${node.path === "secondary" ? " is-secondary" : ""}${node.confidence === "inferred" ? " is-inferred" : ""}${node.isBottleneck ? " is-bottleneck" : ""}${selected ? " is-selected" : ""}${dimmed ? " is-dimmed" : ""}`}
+                    className={`graph-node graph-node--${node.stage.type} is-${node.stage.status}${node.path === "secondary" ? " is-secondary" : ""}${node.confidence === "inferred" ? " is-inferred" : ""}${node.isBottleneck ? " is-bottleneck" : ""}${selected ? " is-selected" : ""}${emphasized ? " is-ai-emphasized" : ""}${dimmed ? " is-dimmed" : ""}`}
                     aria-label={accessibleNodeLabel(node.stage, expertise)}
                     aria-pressed={selected}
                     tabIndex={visible ? 0 : -1}

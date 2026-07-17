@@ -1,6 +1,5 @@
 import {
   AlertTriangle,
-  ArrowUp,
   Check,
   ChevronRight,
   Clock3,
@@ -10,7 +9,6 @@ import {
   MoreHorizontal,
   Search,
   ShieldCheck,
-  Sparkles,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { UrlInvestigationForm } from "../../components/UrlInvestigationForm";
@@ -25,6 +23,8 @@ import type { ExpertiseMode, Investigation } from "./schema";
 import type { InvestigationApiError } from "./httpApi";
 import { StageIcon } from "./StageIcon";
 import { BrowserEvidencePanels } from "./BrowserEvidencePanels";
+import { AiInvestigationPanel } from "./AiInvestigationPanel";
+import type { AiDiagnosis } from "./aiSchema";
 
 const expertiseCopy: Record<ExpertiseMode, { label: string; intro: string }> = {
   beginner: {
@@ -60,6 +60,7 @@ export function InvestigationWorkspace({
 }) {
   const hasBrowserEvidence = investigation.stages.some((stage) => stage.id === "browser-complete");
   const [expertise, setExpertise] = useState<ExpertiseMode>("developer");
+  const [aiDiagnosis, setAiDiagnosis] = useState<AiDiagnosis>();
   const [activeDetail, setActiveDetail] = useState<
     "overview" | "dns" | "tls" | "cache" | "browser"
   >("overview");
@@ -192,6 +193,8 @@ export function InvestigationWorkspace({
             onSelectNode={controller.selectNode}
             onSelectEdge={controller.selectEdge}
             onClearSelection={controller.clearSelection}
+            emphasizedNodeIds={new Set(aiDiagnosis?.graphInstructions.emphasizeStageIds ?? [])}
+            aiDimmedNodeIds={new Set(aiDiagnosis?.graphInstructions.dimStageIds ?? [])}
           />
           <JourneyTimeline graph={graph} controller={controller} />
         </div>
@@ -203,21 +206,28 @@ export function InvestigationWorkspace({
         />
       </section>
 
-      <section
-        className="command-bar section-shell"
-        aria-label="Natural language investigation preview"
-      >
-        <Sparkles size={17} />
-        <input
-          aria-label="Investigation command"
-          placeholder="Ask a question or control the journey…"
-          disabled
-        />
-        <span>AI tools · Layer 7</span>
-        <button type="button" disabled aria-label="Submit command">
-          <ArrowUp size={15} />
-        </button>
-      </section>
+      <AiInvestigationPanel
+        investigation={investigation}
+        expertise={expertise}
+        selectedStageId={controller.selectedNodeId}
+        onDiagnosis={(diagnosis) => {
+          setAiDiagnosis(diagnosis);
+          if (diagnosis.graphInstructions.selectedStageId) {
+            controller.selectNode(diagnosis.graphInstructions.selectedStageId);
+          }
+        }}
+        onEvidenceReference={(stageId, evidenceId) => {
+          controller.selectNode(stageId);
+          window.setTimeout(() => {
+            document
+              .querySelector(`[data-evidence-id="${CSS.escape(evidenceId)}"]`)
+              ?.scrollIntoView({
+                behavior: reducedMotion ? "auto" : "smooth",
+                block: "nearest",
+              });
+          }, 0);
+        }}
+      />
 
       <section className="analysis-section section-shell">
         <div className="detail-tabs" role="tablist" aria-label="Investigation details">

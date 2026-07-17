@@ -4,6 +4,13 @@ import {
   type HttpInvestigationResponse,
   type InvestigationApiError,
 } from "./httpApi";
+import {
+  aiInvestigationErrorResponseSchema,
+  diagnoseInvestigationResponseSchema,
+  type AiExpertiseMode,
+  type DiagnoseInvestigationResponse,
+} from "./aiSchema";
+import type { Investigation } from "./schema";
 
 const HTTP_INVESTIGATION_PATH = "/api/v1/investigations/http";
 
@@ -85,6 +92,62 @@ export async function createHttpInvestigation(
   }
 
   const parsed = httpInvestigationResponseSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new InvestigationApiClientError(response.status, genericError(response.status));
+  }
+  return parsed.data;
+}
+
+export async function diagnoseInvestigation(input: {
+  investigation: Investigation;
+  question: string;
+  expertiseMode: AiExpertiseMode;
+  selectedStageId?: string;
+  signal?: AbortSignal;
+  fetcher?: ApiFetch;
+}): Promise<DiagnoseInvestigationResponse> {
+  const fetcher = input.fetcher ?? fetch;
+  let response: Response;
+  try {
+    response = await fetcher(
+      `${apiBaseUrl()}/api/v1/investigations/${encodeURIComponent(input.investigation.id)}/diagnose`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          investigation: input.investigation,
+          question: input.question,
+          expertiseMode: input.expertiseMode,
+          ...(input.selectedStageId ? { selectedStageId: input.selectedStageId } : {}),
+        }),
+        signal: input.signal,
+      },
+    );
+  } catch (error) {
+    const aborted =
+      input.signal?.aborted || (error instanceof Error && error.name === "AbortError");
+    throw new InvestigationApiClientError(0, {
+      code: aborted ? "client_timeout" : "network_error",
+      message: aborted
+        ? "The AI investigation timed out."
+        : "The browser could not reach the AI investigator.",
+      retryable: true,
+    });
+  }
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    throw new InvestigationApiClientError(response.status, genericError(response.status));
+  }
+  if (!response.ok) {
+    const parsed = aiInvestigationErrorResponseSchema.safeParse(payload);
+    throw new InvestigationApiClientError(
+      response.status,
+      parsed.success ? parsed.data.error : genericError(response.status),
+    );
+  }
+  const parsed = diagnoseInvestigationResponseSchema.safeParse(payload);
   if (!parsed.success) {
     throw new InvestigationApiClientError(response.status, genericError(response.status));
   }

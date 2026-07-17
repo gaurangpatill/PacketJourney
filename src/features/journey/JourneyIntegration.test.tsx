@@ -1,7 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { investigationById } from "../../data/investigations";
 import { InvestigationWorkspace } from "../investigation/InvestigationWorkspace";
 
@@ -12,6 +12,8 @@ function renderWorkspace(id = "redirect-chain") {
     </MemoryRouter>,
   );
 }
+
+afterEach(() => vi.restoreAllMocks());
 
 describe("journey workspace integration", () => {
   it("synchronizes graph selection with evidence inspector", async () => {
@@ -73,5 +75,70 @@ describe("journey workspace integration", () => {
     });
     expect(origin).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByText("Measured bottleneck")).toBeInTheDocument();
+  });
+
+  it("applies validated AI emphasis and navigates to cited evidence", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            diagnosis: {
+              id: "diagnosis-graph",
+              question: "What is the likely bottleneck?",
+              summary: "Origin wait is the largest measured stage.",
+              answer:
+                "The origin stage has the dominant recorded duration, without revealing its internal cause.",
+              confidence: 0.8,
+              conclusionType: "supported",
+              relatedFindings: [],
+              prioritizedActions: [],
+              evidenceReferences: [
+                {
+                  evidenceId: "origin-e1",
+                  stageId: "origin",
+                  claim: "The investigation records a 1.46 second origin wait.",
+                },
+              ],
+              uncertainties: [
+                {
+                  statement: "The internal cause is unknown.",
+                  reason: "The investigation cannot observe application internals.",
+                },
+              ],
+              followUpQuestions: [],
+              graphInstructions: {
+                emphasizeStageIds: ["origin"],
+                emphasizeEvidenceIds: ["origin-e1"],
+                dimStageIds: [],
+                selectedStageId: "origin",
+                openPanel: "evidence",
+              },
+              generatedAt: "2026-07-17T16:00:00.000Z",
+              model: "fixture:llama-3.3-70b-fast",
+              promptVersion: "packet-journey-ai-v1",
+              source: "fixture",
+            },
+          }),
+          { headers: { "content-type": "application/json" } },
+        ),
+      ),
+    );
+    renderWorkspace("slow-origin");
+    await user.type(
+      screen.getByLabelText("Ask about this investigation"),
+      "What is the likely bottleneck?",
+    );
+    await user.click(screen.getByRole("button", { name: "Submit question" }));
+    expect(
+      await screen.findByText("Origin wait is the largest measured stage."),
+    ).toBeInTheDocument();
+    const origin = screen.getByRole("button", { name: /Origin.*warning stage/i });
+    expect(origin).toHaveClass("is-ai-emphasized");
+    expect(origin).toHaveAttribute("aria-pressed", "true");
+    expect(
+      within(screen.getByRole("complementary", { name: "Evidence inspector" })).getByText("1.46 s"),
+    ).toBeInTheDocument();
   });
 });
