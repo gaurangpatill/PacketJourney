@@ -6,3 +6,4 @@ coverage
 *.log
 .wrangler
 .dev.vars
+.reference-build

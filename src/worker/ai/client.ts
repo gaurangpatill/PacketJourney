@@ -3,6 +3,7 @@ import type { AiRuntimeConfig } from "./config";
 import type { InvestigationEvidenceContext, AiToolResult } from "./types";
 import { DIAGNOSIS_JSON_SCHEMA, diagnosisMessages, planningMessages } from "./prompts";
 import { modelToolDefinitions } from "./toolRegistry";
+import type { ReferenceCitation } from "../../features/references/schema";
 
 export interface InvestigationAiClient {
   plan(input: {
@@ -15,6 +16,7 @@ export interface InvestigationAiClient {
     context: InvestigationEvidenceContext;
     toolResults: AiToolResult[];
     config: AiRuntimeConfig;
+    references?: ReferenceCitation[];
   }): Promise<AiModelDiagnosisResult>;
 }
 
@@ -172,6 +174,7 @@ export class WorkersAiClient implements InvestigationAiClient {
     context: InvestigationEvidenceContext;
     toolResults: AiToolResult[];
     config: AiRuntimeConfig;
+    references?: ReferenceCitation[];
   }): Promise<AiModelDiagnosisResult> {
     const output = await this.run(
       input.config.model,

@@ -2,8 +2,9 @@
 import { describe, expect, it } from "vitest";
 import { investigationById } from "../../data/investigations";
 import { createRouter } from "../router";
+import { diagnoseInvestigationResponseSchema } from "../../features/investigation/aiSchema";
 
-function diagnosisRequest(id = "fast-cached") {
+function diagnosisRequest(id = "fast-cached", referenceMode: "none" | "authoritative" = "none") {
   return new Request(`https://api.example/api/v1/investigations/${id}/diagnose`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -11,6 +12,7 @@ function diagnosisRequest(id = "fast-cached") {
       investigation: investigationById.get("fast-cached"),
       question: "What can the evidence support, and what remains unknown?",
       expertiseMode: "developer",
+      referenceMode,
     }),
   });
 }
@@ -26,6 +28,23 @@ describe("AI diagnosis route", () => {
       diagnosis: { source: "fixture" },
       usage: { fixture: true },
     });
+  });
+
+  it("adds validated local references only when authoritative mode is requested", async () => {
+    const response = await createRouter()(diagnosisRequest("fast-cached", "authoritative"), {
+      ENVIRONMENT: "test",
+      AI_FIXTURE_MODE: "true",
+    });
+    expect(response.status).toBe(200);
+    const payload = diagnoseInvestigationResponseSchema.parse(await response.json());
+    const retrieval = payload.diagnosis.retrievalMetadata;
+    const technicalReference = payload.diagnosis.technicalReferences[0];
+    const citation = payload.diagnosis.referenceCitations[0];
+    if (!retrieval || !technicalReference || !citation)
+      throw new Error("Missing fixture references");
+    expect(retrieval.status).toBe("fixture");
+    expect(payload.diagnosis.referenceCitations.length).toBeGreaterThan(0);
+    expect(technicalReference.citationId).toBe(citation.citationId);
   });
 
   it("rejects a path and payload investigation mismatch", async () => {

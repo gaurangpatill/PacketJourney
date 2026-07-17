@@ -14,6 +14,7 @@ import { validateAiDiagnosisOutput } from "../ai/validation";
 import { sha256Hex } from "./crypto";
 import { PersistenceError } from "./errors";
 import { PERSISTENCE_LIMITS } from "./limits";
+import { validateDiagnosisReferences } from "../references/validation";
 
 function stable(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(stable);
@@ -51,6 +52,7 @@ function diagnosisDraft(selected: SelectedDiagnosis): AiDiagnosisDraft {
     relatedFindings: diagnosis.relatedFindings,
     prioritizedActions: diagnosis.prioritizedActions,
     evidenceReferences: diagnosis.evidenceReferences,
+    technicalReferences: diagnosis.technicalReferences,
     ...(diagnosis.counterfactualReferences
       ? { counterfactualReferences: diagnosis.counterfactualReferences }
       : {}),
@@ -66,7 +68,13 @@ function validateSelectedDiagnosis(
 ): SelectedDiagnosis | undefined {
   if (!selected) return undefined;
   const parsed = selectedDiagnosisSchema.parse(selected);
-  validateAiDiagnosisOutput(diagnosisDraft(parsed), investigation);
+  validateDiagnosisReferences(parsed.diagnosis);
+  validateAiDiagnosisOutput(
+    diagnosisDraft(parsed),
+    investigation,
+    undefined,
+    new Set(parsed.diagnosis.referenceCitations.map((citation) => citation.citationId)),
+  );
   return parsed;
 }
 

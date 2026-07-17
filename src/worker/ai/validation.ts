@@ -48,6 +48,7 @@ export function validateAiDiagnosisOutput(
   output: unknown,
   investigation: Investigation,
   counterfactual?: CounterfactualAiContext,
+  allowedCitationIds: ReadonlySet<string> = new Set(),
 ): AiDiagnosisDraft {
   const parsed = aiDiagnosisDraftSchema.safeParse(output);
   if (!parsed.success) {
@@ -57,6 +58,14 @@ export function validateAiDiagnosisOutput(
     );
   }
   const draft = parsed.data;
+  for (const reference of draft.technicalReferences) {
+    if (!allowedCitationIds.has(reference.citationId)) {
+      throw new AiOutputError(
+        "unknown_reference",
+        "The model referenced a technical citation that was not supplied.",
+      );
+    }
+  }
   const evidenceToStage = new Map(
     investigation.stages.flatMap((stage) =>
       stage.evidence.map((item) => [item.id, stage.id] as const),

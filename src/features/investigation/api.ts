@@ -105,6 +105,7 @@ export async function diagnoseInvestigation(input: {
   expertiseMode: AiExpertiseMode;
   selectedStageId?: string;
   counterfactualContext?: CounterfactualAiContext;
+  referenceMode?: "none" | "authoritative";
   signal?: AbortSignal;
   fetcher?: ApiFetch;
 }): Promise<DiagnoseInvestigationResponse> {
@@ -124,6 +125,7 @@ export async function diagnoseInvestigation(input: {
           ...(input.counterfactualContext
             ? { counterfactualContext: input.counterfactualContext }
             : {}),
+          referenceMode: input.referenceMode ?? "none",
         }),
         signal: input.signal,
       },

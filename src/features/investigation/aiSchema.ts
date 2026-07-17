@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { investigationApiErrorSchema } from "./httpApi";
 import { investigationSchema } from "./schema";
+import { referenceCitationSchema, referenceRetrievalMetadataSchema } from "../references/schema";
 
 export const aiExpertiseModeSchema = z.enum(["beginner", "developer", "network-engineer"]);
 export const aiConclusionTypeSchema = z.enum([
@@ -77,6 +78,13 @@ export const aiCounterfactualReferenceSchema = z
   })
   .strict();
 
+export const aiTechnicalReferenceSchema = z
+  .object({
+    citationId: referenceCitationSchema.shape.citationId,
+    claim: boundedText(500),
+  })
+  .strict();
+
 export const counterfactualAiContextSchema = z
   .object({
     label: z.literal("SIMULATED · NOT MEASURED"),
@@ -139,6 +147,7 @@ export const aiDiagnosisDraftSchema = z
     relatedFindings: z.array(aiFindingSchema).max(6),
     prioritizedActions: z.array(aiActionSchema).max(6),
     evidenceReferences: z.array(aiEvidenceReferenceSchema).max(16),
+    technicalReferences: z.array(aiTechnicalReferenceSchema).max(8).default([]),
     counterfactualReferences: z.array(aiCounterfactualReferenceSchema).max(16).optional(),
     uncertainties: z.array(aiUncertaintySchema).max(8),
     followUpQuestions: z.array(boundedText(240)).max(6),
@@ -154,6 +163,8 @@ export const aiDiagnosisSchema = aiDiagnosisDraftSchema
     model: z.string().min(1).max(180),
     promptVersion: z.string().min(1).max(80),
     source: z.enum(["workers-ai", "fixture", "evidence-guard"]),
+    referenceCitations: z.array(referenceCitationSchema).max(4).default([]),
+    retrievalMetadata: referenceRetrievalMetadataSchema.optional(),
   })
   .strict();
 
@@ -164,6 +175,7 @@ export const diagnoseInvestigationRequestSchema = z
     investigation: investigationSchema,
     selectedStageId: z.string().min(1).max(160).optional(),
     counterfactualContext: counterfactualAiContextSchema.optional(),
+    referenceMode: z.enum(["none", "authoritative"]).default("none"),
   })
   .strict();
 
@@ -203,6 +215,7 @@ export type AiFinding = z.infer<typeof aiFindingSchema>;
 export type AiAction = z.infer<typeof aiActionSchema>;
 export type AiEvidenceReference = z.infer<typeof aiEvidenceReferenceSchema>;
 export type AiCounterfactualReference = z.infer<typeof aiCounterfactualReferenceSchema>;
+export type AiTechnicalReference = z.infer<typeof aiTechnicalReferenceSchema>;
 export type CounterfactualAiContext = z.infer<typeof counterfactualAiContextSchema>;
 export type AiUncertainty = z.infer<typeof aiUncertaintySchema>;
 export type AiGraphInstructions = z.infer<typeof aiGraphInstructionsSchema>;

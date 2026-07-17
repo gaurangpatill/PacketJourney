@@ -12,6 +12,11 @@ import { diagnoseInvestigation } from "./orchestrator";
 import { AiQuestionError } from "./question";
 import { AiToolError } from "./toolRegistry";
 import { AiOutputError } from "./validation";
+import {
+  FixtureReferenceRetriever,
+  UnavailableReferenceRetriever,
+  VectorizeReferenceRetriever,
+} from "../references/retrieval";
 
 const MAX_AI_BODY_LENGTH = 512_000;
 
@@ -159,7 +164,24 @@ export async function handleAiDiagnosis(input: {
         retryable: false,
       });
     }
-    const result = await diagnoseInvestigation({ ...parsed.data, client, config });
+    const referenceRetriever =
+      parsed.data.referenceMode === "authoritative"
+        ? config.fixtureMode
+          ? new FixtureReferenceRetriever()
+          : input.env.AI && input.env.TECHNICAL_REFERENCES && input.env.DB
+            ? new VectorizeReferenceRetriever(
+                input.env.AI,
+                input.env.TECHNICAL_REFERENCES,
+                input.env.DB,
+              )
+            : new UnavailableReferenceRetriever()
+        : undefined;
+    const result = await diagnoseInvestigation({
+      ...parsed.data,
+      client,
+      config,
+      referenceRetriever,
+    });
     const response = diagnoseInvestigationResponseSchema.parse(result);
     logEvent("info", "ai.diagnosis.completed", {
       investigationId: input.investigationId,
@@ -170,6 +192,8 @@ export async function handleAiDiagnosis(input: {
       inputCharacters: response.usage?.inputCharacters,
       outputCharacters: response.usage?.outputCharacters,
       fixture: response.usage?.fixture,
+      referenceStatus: response.diagnosis.retrievalMetadata?.status,
+      referenceCount: response.diagnosis.referenceCitations.length,
     });
     return Response.json(response);
   } catch (error) {

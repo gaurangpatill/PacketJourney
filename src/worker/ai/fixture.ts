@@ -53,6 +53,10 @@ export class FixtureAiClient implements InvestigationAiClient {
           claim: `The investigation recorded ${evidence.label}.`,
         },
       ],
+      technicalReferences: (input.references ?? []).slice(0, 2).map((reference) => ({
+        citationId: reference.citationId,
+        claim: `This reference explains the relevant ${reference.category} semantics.`,
+      })),
       ...(input.context.counterfactual
         ? {
             counterfactualReferences: [
@@ -108,6 +112,7 @@ export function inconclusiveDraft(reason: string): AiDiagnosisDraft {
     relatedFindings: [],
     prioritizedActions: [],
     evidenceReferences: [],
+    technicalReferences: [],
     uncertainties: [{ statement: "No supported conclusion is available.", reason }],
     followUpQuestions: ["Can the investigation collect the missing stage evidence in another run?"],
     graphInstructions: {

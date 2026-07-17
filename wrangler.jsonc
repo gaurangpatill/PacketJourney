@@ -47,6 +47,12 @@
   "ai": {
     "binding": "AI",
   },
+  "vectorize": [
+    {
+      "binding": "TECHNICAL_REFERENCES",
+      "index_name": "packet-journey-references-v1",
+    },
+  ],
   "d1_databases": [
     {
       "binding": "DB",
@@ -65,6 +71,10 @@
     "AI_ENABLED": "true",
     "AI_GATEWAY_ID": "default",
     "AI_MODEL": "llama-3.3-70b-fast",
+    "REFERENCE_INDEX_VERSION": "references-v1",
+    "REFERENCE_EMBEDDING_MODEL": "@cf/qwen/qwen3-embedding-0.6b",
+    "REFERENCE_CORPUS_VERSION": "2026-07-v1",
+    "REFERENCE_RETRIEVAL_VERSION": "reference-retrieval-v1",
   },
   "env": {
     "preview": {
@@ -74,6 +84,10 @@
         "AI_ENABLED": "true",
         "AI_GATEWAY_ID": "default",
         "AI_MODEL": "llama-3.3-70b-fast",
+        "REFERENCE_INDEX_VERSION": "references-v1",
+        "REFERENCE_EMBEDDING_MODEL": "@cf/qwen/qwen3-embedding-0.6b",
+        "REFERENCE_CORPUS_VERSION": "2026-07-v1",
+        "REFERENCE_RETRIEVAL_VERSION": "reference-retrieval-v1",
       },
       "ratelimits": [
         {
@@ -115,6 +129,12 @@
       "ai": {
         "binding": "AI",
       },
+      "vectorize": [
+        {
+          "binding": "TECHNICAL_REFERENCES",
+          "index_name": "packet-journey-references-v1",
+        },
+      ],
       "d1_databases": [
         {
           "binding": "DB",

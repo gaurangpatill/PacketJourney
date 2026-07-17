@@ -1,0 +1,27 @@
+export const REFERENCE_CONFIG = {
+  binding: "TECHNICAL_REFERENCES",
+  indexName: "packet-journey-references-v1",
+  indexVersion: "references-v1",
+  corpusVersion: "2026-07-v1",
+  retrievalVersion: "reference-retrieval-v1",
+  embeddingModel: "@cf/qwen/qwen3-embedding-0.6b",
+  dimensions: 1_024,
+  metric: "cosine",
+  namespace: "technical-references",
+  metadataIndexes: ["publisher", "category", "corpusVersion", "language"],
+  topK: 12,
+  maximumSelected: 4,
+  maximumPerSource: 2,
+  minimumSimilarity: 0.62,
+  maximumContextCharacters: 6_000,
+  maximumChunkCharacters: 1_800,
+  targetChunkCharacters: 1_300,
+  maximumExcerptCharacters: 520,
+  maximumTopics: 8,
+  maximumSourceBytes: 1_500_000,
+  maximumChunksPerSource: 80,
+  embeddingBatchSize: 32,
+  vectorUpsertBatchSize: 500,
+} as const;
+
+export type ReferenceMetadataIndex = (typeof REFERENCE_CONFIG.metadataIndexes)[number];

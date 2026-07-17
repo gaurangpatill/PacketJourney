@@ -15,6 +15,8 @@ import { validateAiQuestion } from "./question";
 import { executeAiToolCalls } from "./toolRegistry";
 import type { AiModelUsage } from "./types";
 import { validateAiDiagnosisOutput } from "./validation";
+import type { ReferenceRetriever } from "../references/retrieval";
+import type { ReferenceRetrievalResult } from "../../features/references/schema";
 
 export interface AiInvestigationResult {
   diagnosis: AiDiagnosis;
@@ -40,6 +42,7 @@ function completeDiagnosis(input: {
   question: string;
   model: string;
   source: AiDiagnosis["source"];
+  retrieval?: ReferenceRetrievalResult;
 }): AiDiagnosis {
   return aiDiagnosisSchema.parse({
     ...input.draft,
@@ -49,6 +52,8 @@ function completeDiagnosis(input: {
     model: input.model,
     promptVersion: AI_PROMPT_VERSION,
     source: input.source,
+    referenceCitations: input.retrieval?.citations ?? [],
+    ...(input.retrieval ? { retrievalMetadata: input.retrieval.metadata } : {}),
   });
 }
 
@@ -60,6 +65,8 @@ export async function diagnoseInvestigation(input: {
   counterfactualContext?: CounterfactualAiContext;
   client: InvestigationAiClient;
   config: AiRuntimeConfig;
+  referenceMode?: "none" | "authoritative";
+  referenceRetriever?: ReferenceRetriever;
 }): Promise<AiInvestigationResult> {
   const question = validateAiQuestion(input.question);
   if (
@@ -120,22 +127,33 @@ export async function diagnoseInvestigation(input: {
     calls: planning.toolCalls,
     maximumCalls: Math.min(input.config.maximumToolsPerRound, input.config.maximumTotalToolCalls),
   });
+  const retrieval =
+    input.referenceMode === "authoritative" && input.referenceRetriever
+      ? await input.referenceRetriever.retrieve({
+          question,
+          investigation: input.investigation,
+          expertiseMode: input.expertiseMode,
+        })
+      : undefined;
   const modelResult = await input.client.diagnose({
     question,
     context,
     toolResults,
     config: input.config,
+    references: retrieval?.citations ?? [],
   });
   const draft = validateAiDiagnosisOutput(
     modelResult.output,
     input.investigation,
     input.counterfactualContext,
+    new Set(retrieval?.citations.map((citation) => citation.citationId) ?? []),
   );
   const diagnosis = completeDiagnosis({
     draft,
     question,
     model: input.config.fixtureMode ? `fixture:${input.config.modelKey}` : input.config.model,
     source: input.config.fixtureMode ? "fixture" : "workers-ai",
+    retrieval,
   });
   const tokenUsage = mergeUsage(planning.usage, modelResult.usage);
   const usage = aiUsageSummarySchema.parse({

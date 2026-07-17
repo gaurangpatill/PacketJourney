@@ -27,6 +27,11 @@ export interface Env {
   AI_TIMEOUT_MS?: string;
   AI_INVESTIGATION_RATE_LIMITER?: RateLimit;
   AI_INVESTIGATION_HASH_RATE_LIMITER?: RateLimit;
+  TECHNICAL_REFERENCES?: VectorizeIndex;
+  REFERENCE_INDEX_VERSION?: string;
+  REFERENCE_EMBEDDING_MODEL?: string;
+  REFERENCE_CORPUS_VERSION?: string;
+  REFERENCE_RETRIEVAL_VERSION?: string;
 }
 
 export interface RuntimeLimits {
