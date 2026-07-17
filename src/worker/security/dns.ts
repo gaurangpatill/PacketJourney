@@ -30,7 +30,7 @@ export class DnsResolutionError extends Error {
 }
 
 export class CloudflareDohResolver implements AddressResolver {
-  constructor(private readonly fetcher: ResolverFetch = fetch) {}
+  constructor(private readonly fetcher: ResolverFetch = (input, init) => fetch(input, init)) {}
 
   async resolve(hostname: string, signal?: AbortSignal): Promise<string[]> {
     const addresses = new Set<string>();
@@ -42,7 +42,7 @@ export class CloudflareDohResolver implements AddressResolver {
       const response = await this.fetcher(query, {
         method: "GET",
         headers: { accept: "application/dns-json" },
-        redirect: "error",
+        redirect: "manual",
         cache: "no-store",
         signal,
       });

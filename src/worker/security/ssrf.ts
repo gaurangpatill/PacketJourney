@@ -1,6 +1,7 @@
 import type { AddressResolver } from "./dns";
 import { assessIpAddress, isIpAddress } from "./ip";
 import type { NormalizedUrl } from "./url";
+import { logEvent } from "../logging";
 
 const INTERNAL_HOSTS = new Set([
   "localhost",
@@ -79,6 +80,10 @@ export async function validatePublicDestination(
     addresses = await resolver.resolve(normalized.hostname, signal);
   } catch (error) {
     if (error instanceof SsrfPolicyError) throw error;
+    logEvent("warn", "dns.preflight_failed", {
+      errorName: error instanceof Error ? error.name : "UnknownError",
+      errorMessage: error instanceof Error ? error.message : "Unknown resolver failure",
+    });
     throw new SsrfPolicyError(
       "resolution_failed",
       "The destination hostname could not be safely resolved.",

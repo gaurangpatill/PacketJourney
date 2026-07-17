@@ -27,7 +27,7 @@ describe("CloudflareDohResolver", () => {
       "2606:2800:220:1:248:1893:25c8:1946",
     ]);
     expect(fetcher).toHaveBeenCalledTimes(2);
-    expect(fetcher.mock.calls[0]?.[1]).toMatchObject({ redirect: "error", cache: "no-store" });
+    expect(fetcher.mock.calls[0]?.[1]).toMatchObject({ redirect: "manual", cache: "no-store" });
   });
 
   it("fails closed when no address records are returned", async () => {
