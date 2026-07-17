@@ -2,7 +2,7 @@
 
 Packet Journey is an AI-assisted network investigation environment that reconstructs, visualizes, and diagnoses the path from a URL to a rendered webpage.
 
-Layers 1–8 are complete: the Cloudflare investigation pipeline, evidence-grounded AI investigator, deterministic counterfactual debugger, and D1-backed investigation history now support measured journeys, explicitly simulated comparisons, and bounded read-only reports. AI explains evidence; it does not collect facts or calculate simulations.
+Layers 1–9 are complete: the Cloudflare investigation pipeline, evidence-grounded AI investigator, deterministic counterfactual debugger, D1-backed history, and versioned authoritative reference retrieval support measured journeys, explicitly simulated comparisons, and reproducible read-only reports. Deterministic tools collect facts; Vectorize retrieves explanatory standards; AI interprets both without turning documentation into site evidence.
 
 ![Packet Journey browser-enabled journey](./docs/assets/browser-journey.png)
 
@@ -33,6 +33,9 @@ Layers 1–8 are complete: the Cloudflare investigation pipeline, evidence-groun
 - D1-backed save, history, filtering, pagination, rename, and delete flows for versioned canonical evidence snapshots.
 - Read-only share reports with 256-bit opaque bearer tokens, hash-only token storage, optional expiry/revocation, access metadata, and explicit AI/simulation/screenshot inclusion controls.
 - Saved screenshots promoted into a private R2 namespace with owner/share authorization and a documented 30-day application retention bound.
+- Evidence-only and evidence-plus-reference explanation modes over one unchanged investigation, with one metadata-filtered Vectorize query and explicit unavailable/no-result states.
+- A reviewed 17-source corpus from Cloudflare, IETF, MDN, OWASP, web.dev, and CA/Browser Forum, embedded with Workers AI and resolved through D1 before prompting.
+- Frozen citation cards and a model/index/corpus/retrieval provenance panel in live, saved, and shared explanations.
 
 The seven seeded demonstrations remain stable recorded examples. Live workspaces are labeled **Live network evidence** and contain only facts returned by deterministic tools or limited, explicitly labeled inferences with provenance.
 
@@ -61,9 +64,14 @@ flowchart LR
     M --> UI
     M --> S[Bounded evidence selector]
     S --> AI[Workers AI via AI Gateway]
+    S --> Q[Deterministic reference query]
+    Q --> VX[Versioned Vectorize index]
+    VX --> RC[D1 reference chunks + validation]
+    RC --> AI
     AI <--> T[Restricted read-only tools]
     AI --> V[Validated evidence-linked diagnosis]
     V --> UI
+    V --> PROV[D1 frozen citation provenance]
     M --> CF[Pure deterministic counterfactual rules]
     CF --> CMP[Observed vs simulated comparison]
     CMP --> UI
@@ -77,7 +85,7 @@ flowchart LR
     DEMO[Recorded examples] --> UI
 ```
 
-The React client and Worker share strict TypeScript and Zod runtime contracts. Workers performs bounded diagnostics, AI orchestration, and persistence authorization; Browser Run collects isolated page evidence; D1 stores indexed metadata and bounded versioned JSON snapshots; R2 stores screenshot bytes; Workers AI interprets selected evidence; AI Gateway provides model observability/routing; and native Rate Limiting bindings protect network, browser, AI, and public-share work. The model has no arbitrary fetch or code tool.
+The React client and Worker share strict TypeScript and Zod runtime contracts. Workers performs bounded diagnostics, retrieval/AI orchestration, and persistence authorization; Browser Run collects isolated page evidence; Vectorize searches versioned embeddings; D1 is the evidence, reference-content, model-version, retrieval, and frozen-citation provenance ledger; R2 stores screenshot bytes; Workers AI embeds controlled queries and interprets validated evidence/references; AI Gateway provides text-model observability/routing. The model has no arbitrary fetch or code tool.
 
 ## Request lifecycle
 
@@ -104,6 +112,7 @@ npm run dev:worker:ai
 npm run build:web
 npm run build:worker
 npm run db:reset:local
+npm run test:retrieval
 ```
 
 ## Quality checks
@@ -150,8 +159,10 @@ Preview deployment is intentionally not automatic from local development. It req
 - `AI_GATEWAY_ID` — AI Gateway identifier, default `default`.
 - `AI_MODEL` — configured model-registry key, default `llama-3.3-70b-fast`.
 - `AI_FALLBACK_MODEL`, `AI_MAX_REQUESTS`, `AI_MAX_TOOL_ROUNDS`, `AI_MAX_INPUT_CHARS`, `AI_MAX_OUTPUT_CHARS`, `AI_MAX_OUTPUT_TOKENS`, `AI_TIMEOUT_MS` — optional bounded AI controls.
+- `TECHNICAL_REFERENCES` — versioned Vectorize binding for `packet-journey-references-v1`; absent from credential-free local fixture configuration.
+- `REFERENCE_INDEX_VERSION`, `REFERENCE_EMBEDDING_MODEL`, `REFERENCE_CORPUS_VERSION`, `REFERENCE_RETRIEVAL_VERSION` — independent, non-secret provenance contracts.
 
-`DB`, `BROWSER`, `BROWSER_ARTIFACTS`, `AI`, and the Rate Limiting bindings are typed Wrangler bindings, not secrets. No Cloudflare API token or model-provider key is read by application code.
+`DB`, `BROWSER`, `BROWSER_ARTIFACTS`, `AI`, `TECHNICAL_REFERENCES`, and the Rate Limiting bindings are typed Wrangler bindings, not secrets. Ingestion alone accepts a scoped Cloudflare API token through its operator process; application code does not read one.
 
 ## Security considerations
 
@@ -176,6 +187,8 @@ Client URL validation is only a usability guard. The Worker independently reject
 - Keep model IDs in one registry, cap context well below the documented window, skip Gateway caching, and runtime-validate every model claim/reference before rendering.
 - Return an evidence-guarded inconclusive answer without inference when the selected investigation has no relevant evidence.
 - Keep counterfactual execution in a fixed, versioned TypeScript rule registry; reject arbitrary expressions and mark unsupported downstream metrics unavailable.
+- Keep Vectorize embeddings and compact metadata separate from normalized D1 chunks; resolve and validate every match before prompting.
+- Treat D1 as a reproducibility ledger for evidence, model, retrieval, versions, and frozen citations—not a customer dashboard database.
 
 ## Known limitations
 
@@ -192,13 +205,14 @@ Client URL validation is only a usability guard. The Worker independently reject
 - Anonymous installation ownership is deliberately not authentication. Clearing cookies or changing browsers loses owner access, and there is no account recovery or cross-device history.
 - Public reports are bearer links. Tokens are high-entropy and stored only as hashes, but anyone who receives a live link can read its bounded projection until it expires or is revoked.
 - D1 has bounded snapshot/output limits; large screenshot bytes remain in R2. Saved artifact expiry is enforced on reads, while bucket lifecycle rules provide physical deletion.
-- Durable Objects, Queues, Vectorize/AI Search, full authentication, organizations, live viewers, and collaborative editing remain unimplemented.
+- Live Vectorize depends on provisioned account resources; credential-free development uses an explicit fixture corpus and never silently falls back in production.
+- Durable Objects, Queues, AI Search, full authentication, organizations, live viewers, and collaborative editing remain unimplemented.
 - Layout is optimized for directed acyclic request journeys. Defensive cyclic input rendering exists, but cycle-specific routing is not a Layer 2 feature.
 - Very large graphs are fit as an overview and may require user zoom; semantic clustering is deferred until real browser traces establish its rules.
 
 ## Roadmap
 
-Layer 8 is complete. Layer 9 has not started. Durable Objects remain deferred until a concrete real-time coordination requirement exists; Queues, Vectorize/AI Search, full authentication, organizations, and collaboration are also absent. The remaining milestones are tracked in [the implementation plan](./docs/implementation-plan.md).
+Layer 9 is complete. Layer 10 has not started. Durable Objects remain deferred until a concrete real-time coordination requirement exists; Queues, AI Search, full authentication, organizations, and collaboration remain absent. The remaining milestone is tracked in [the implementation plan](./docs/implementation-plan.md).
 
 ## Architecture and planning
 
@@ -225,3 +239,8 @@ Layer 8 is complete. Layer 9 has not started. Durable Objects remain deferred un
 - [D1 schema and migrations](./docs/d1-schema.md)
 - [Share-link security](./docs/share-links.md)
 - [Data retention](./docs/data-retention.md)
+- [Reference retrieval](./docs/reference-retrieval.md)
+- [Reference corpus](./docs/reference-corpus.md)
+- [Reference ingestion](./docs/reference-ingestion.md)
+- [Retrieval provenance](./docs/retrieval-provenance.md)
+- [Retrieval evaluation](./docs/retrieval-evaluation.md)

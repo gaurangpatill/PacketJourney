@@ -18,6 +18,28 @@ Packet Journey separates collection, interpretation, and presentation.
 14. A separate persistence boundary validates a completed or meaningfully partial canonical investigation, removes transient artifact URLs, serializes it deterministically, hashes it, and stores indexed metadata plus bounded schema-versioned JSON in D1.
 15. Saved browser screenshots are copied from the transient R2 prefix into a private saved-artifact prefix. D1 stores only opaque key metadata and owner/share authorization is checked before every read.
 16. Owner history uses an HttpOnly anonymous-installation cookie whose SHA-256 hash is the D1 owner identifier. Read-only reports use independent 256-bit tokens; only token hashes are persisted.
+17. Authoritative diagnosis mode builds one sanitized deterministic reference query and fixed metadata filter, embeds it with Workers AI, and queries the versioned `TECHNICAL_REFERENCES` Vectorize index.
+18. Vector matches resolve to normalized D1 chunks and pass allowlist/hash/category/corpus/score/budget validation. Workers AI receives references in a separate untrusted block; exact citation IDs are cross-validated.
+19. Saving a selected diagnosis writes the retrieval run and frozen citation display fields to D1. Saved/shared rendering never queries Vectorize and therefore remains reproducible after reindexing.
+
+## Layer 9 reference boundary
+
+```mermaid
+flowchart LR
+    M[Reviewed source manifest] --> I[Controlled ingestion]
+    I --> C[Semantic chunks + SHA-256]
+    C --> E[Workers AI embeddings]
+    E --> VX[(Vectorize references-v1)]
+    C --> D1[(D1 reference chunks)]
+    Q[Evidence-aware deterministic query] --> VX
+    VX --> R[D1 resolution + validation + rerank]
+    D1 --> R
+    R --> AI[Evidence-grounded diagnosis]
+    AI --> P[(D1 frozen retrieval provenance)]
+    P --> S[Saved/shared reference snapshot]
+```
+
+Vectorize owns similarity search, not source content or historical reports. D1 owns normalized chunk content and the durable evidence/model/retrieval/version/citation ledger. There is no general search endpoint, crawler, upload, or AI-selected source/filter.
 
 ## Layer 8 persistence boundary
 
@@ -101,6 +123,6 @@ The SVG canvas owns only viewport interaction. A shared journey controller synch
 
 This separation keeps future Worker responses independent of rendering technology and lets graph generation and layout be tested without a browser. See [journey-visualization.md](./journey-visualization.md).
 
-Cloudflare services are introduced only with a concrete responsibility. Workers provides APIs, orchestration, persistence authorization, and public projections; Browser Run provides isolated Chromium evidence; D1 stores indexed history and bounded versioned snapshots; R2 stores screenshots; Workers AI interprets bounded evidence; AI Gateway supplies inference observability/routing with caching disabled; native Rate Limiting bindings protect diagnostic, AI, and public-share work. Cloudflare DoH supplies resolver evidence, and SSLMate Cert Spotter remains a narrowly scoped certificate fallback. Queues, Durable Objects, Vectorize/AI Search, full identity, organizations, and collaboration remain unimplemented.
+Cloudflare services are introduced only with a concrete responsibility. Workers provides APIs, orchestration, persistence authorization, and public projections; Browser Run provides isolated Chromium evidence; Vectorize searches curated technical chunks; D1 stores evidence snapshots, reference content, and frozen provenance; R2 stores screenshots; Workers AI embeds controlled queries and interprets bounded evidence/references; AI Gateway supplies text-inference observability/routing with caching disabled; native Rate Limiting bindings protect diagnostic, AI, and public-share work. Cloudflare DoH supplies resolver evidence, and SSLMate Cert Spotter remains a narrowly scoped certificate fallback. Queues, Durable Objects, AI Search, full identity, organizations, and collaboration remain unimplemented.
 
 See [persistence.md](./persistence.md), [d1-schema.md](./d1-schema.md), [share-links.md](./share-links.md), [data-retention.md](./data-retention.md), [ai-investigation.md](./ai-investigation.md), [ai-trust-boundary.md](./ai-trust-boundary.md), [browser-investigation.md](./browser-investigation.md), [browser-artifacts.md](./browser-artifacts.md), [http-diagnostics.md](./http-diagnostics.md), [dns-tls-diagnostics.md](./dns-tls-diagnostics.md), [cloudflare-runtime.md](./cloudflare-runtime.md), and [implementation-plan.md](./implementation-plan.md).

@@ -84,3 +84,15 @@ Scenario text is bounded and React-rendered as text. Export is generated client-
 - Deleting a saved investigation cascades D1 children and then attempts R2 cleanup. Failed R2 cleanup is logged and recorded in a repair table without restoring deleted access.
 
 The snapshot consistency hash is not a signature and does not prove provenance. An active share URL is a bearer capability; recipients can forward it. Full account authentication, organization ACLs, audit identity, and collaborative access are deferred.
+
+## Reference retrieval boundary
+
+- Ingestion accepts only enabled entries in the checked-in HTTPS manifest; there is no crawler, arbitrary source URL, user upload, or public search route.
+- Runtime index name, namespace, embedding model, and metadata filters are application constants. User text and the language model cannot change them.
+- Questions are bounded and sanitized; investigated URL paths, query parameters, and fragments are removed from persisted controlled queries. D1 stores a question hash rather than a second raw-question copy.
+- Compact vector metadata resolves to D1 content. Unresolved IDs, disabled sources, mismatched publisher/category/URL/hash/corpus, below-threshold scores, duplicates, and over-budget text are rejected before prompting.
+- Retrieved source text is explicitly delimited untrusted data. It receives no tool authority and cannot override system instructions. Model-produced URLs and unsupplied citation IDs fail closed.
+- Vector embeddings are neither returned to clients nor stored in D1. Generated ingestion artifacts, raw downloads, and operator tokens are ignored and remain outside version control.
+- A retrieval outage never expands trust: the evidence-only diagnosis remains available and no AI Search, web search, or unapproved source fallback runs.
+
+Frozen shared citation URLs are exact allowlisted canonical source URLs and contain no investigation query data. Shared projections omit the sanitized retrieval query, internal D1 row identifiers, Vectorize match IDs beyond the display citation identity, scores by default, embeddings, prompts, and full documents.

@@ -70,23 +70,62 @@ In Layer 1, the orchestrator boundary is represented by seeded mock investigatio
 - [x] Layer 6 — Evidence-grounded AI investigation
 - [x] Layer 7 — Deterministic counterfactual debugging
 - [x] Layer 8 — D1-backed investigation history and shareable reports
-- [ ] Layer 9 — Live coordination and production expansion
+- [x] Layer 9 — Vectorize reference retrieval and persistent citation provenance
 - [ ] Layer 10 — Production polish and deployment
 
 ## Initial decisions to validate
 
-| Decision           | Initial choice                             | Validation point                                                              |
-| ------------------ | ------------------------------------------ | ----------------------------------------------------------------------------- |
-| Frontend           | React, Vite, strict TypeScript             | Revisit only if server-rendered marketing content becomes a hard requirement. |
-| Routing            | React Router with route-level boundaries   | Validate shareable journey URLs and browser history in Layer 1.               |
-| Styling            | Token-driven plain CSS                     | Validate maintainability before adding a CSS framework.                       |
-| Visualization      | Accessible custom SVG in Layer 2           | Benchmark complex third-party graphs before rejecting React Flow.             |
-| Runtime validation | Zod schemas shared by UI and Worker        | Validate Worker bundle size in Layer 3.                                       |
-| Backend            | Cloudflare Worker with small typed tools   | Validate local Worker runtime and outbound API constraints in Layer 3.        |
-| Live state         | Request/response; no Durable Object        | Add coordination only when a concrete multi-viewer requirement exists.        |
-| Browser jobs       | Bounded synchronous Browser Run session    | Add Queues only after measured latency or retry behavior requires async work. |
-| AI                 | Workers AI through AI Gateway, strict JSON | Runtime validation and evidence abstention implemented in Layer 6.            |
-| Counterfactuals    | Shared pure TypeScript deterministic rules | Engine stays local; Layer 8 can persist one explicitly selected result.       |
+| Decision            | Initial choice                                | Validation point                                                              |
+| ------------------- | --------------------------------------------- | ----------------------------------------------------------------------------- |
+| Frontend            | React, Vite, strict TypeScript                | Revisit only if server-rendered marketing content becomes a hard requirement. |
+| Routing             | React Router with route-level boundaries      | Validate shareable journey URLs and browser history in Layer 1.               |
+| Styling             | Token-driven plain CSS                        | Validate maintainability before adding a CSS framework.                       |
+| Visualization       | Accessible custom SVG in Layer 2              | Benchmark complex third-party graphs before rejecting React Flow.             |
+| Runtime validation  | Zod schemas shared by UI and Worker           | Validate Worker bundle size in Layer 3.                                       |
+| Backend             | Cloudflare Worker with small typed tools      | Validate local Worker runtime and outbound API constraints in Layer 3.        |
+| Live state          | Request/response; no Durable Object           | Add coordination only when a concrete multi-viewer requirement exists.        |
+| Browser jobs        | Bounded synchronous Browser Run session       | Add Queues only after measured latency or retry behavior requires async work. |
+| AI                  | Workers AI through AI Gateway, strict JSON    | Runtime validation and evidence abstention implemented in Layer 6.            |
+| Counterfactuals     | Shared pure TypeScript deterministic rules    | Engine stays local; Layer 8 can persist one explicitly selected result.       |
+| Reference retrieval | Vectorize + Workers AI embeddings + D1 chunks | Version every index/corpus/query and freeze selected citations when saved.    |
+
+## Layer 9 implementation plan
+
+Objective: add authoritative, allowlisted technical reference retrieval to the existing evidence-grounded diagnosis endpoint. Vectorize ranks compact chunk embeddings, D1 resolves and validates normalized reference content, and saved diagnoses freeze the exact reference display fields and retrieval versions. This is an investigation provenance system—not generic search, document chat, customer management, or collaboration.
+
+Validated configuration before index creation:
+
+- Embedding model: `@cf/qwen/qwen3-embedding-0.6b`, selected for its current Workers AI availability, 1,024-dimensional output, cosine recommendation, batch input, and technical retrieval fit. Cloudflare's model page and release table currently disagree on the input-token ceiling; runtime chunks are capped at 1,800 characters and do not depend on either published limit.
+- Index: `packet-journey-references-v1`, 1,024 dimensions, cosine metric. Changing model dimensions or metric requires a new index and full corpus re-embedding.
+- Versions: index `references-v1`, corpus `2026-07-v1`, retrieval algorithm `reference-retrieval-v1`, and existing independent prompt/model/migration/snapshot/counterfactual versions.
+- Metadata indexes created before ingestion: `publisher`, `category`, `corpusVersion`, and `language`, all strings. Compact non-indexed metadata may additionally carry `sourceId`, `contentHash`, and primary topic for integrity/debugging.
+- Runtime query: one sanitized deterministic query derived from question intent, relevant evidence categories/labels, deterministic findings, protocol terms, expertise depth, and runtime limitations. The model cannot select the index, query, namespace, publisher, or filter.
+- Limits: one embedding query, top 12 candidates, score floor 0.62, at most four selected chunks, at most two per source, at most four publishers, 6,000 total reference characters, one retry only for ingestion upsert—not runtime retrieval.
+- Deterministic rerank: vector similarity (70%), exact category (10%), protocol/evidence-term overlap (10%), category-specific publisher authority (7%), and source diversity (3%), with duplicate hashes and adjacent overlapping chunks removed before selection. This is a hand-authored score, not a learned reranker.
+- Content strategy: Vectorize stores embeddings and compact metadata; D1 stores normalized sources/chunks and resolves every vector ID. Diagnosis output carries validated frozen citation display fields so later saved/shared reports never require the current Vectorize index.
+
+Initial allowlisted publishers are Cloudflare Developers, IETF Datatracker/RFC Editor, MDN, OWASP, web.dev, and CA/Browser Forum. The checked-in manifest owns every canonical source URL. No user URL, arbitrary webpage, investigation, screenshot, console output, raw page content, or AI explanation can enter the corpus.
+
+Likely files:
+
+- `src/references/` and `scripts/references/` for manifest validation, controlled fetch/extraction/normalization/chunking, stable IDs/hashes, changed-chunk embedding, bounded NDJSON/SQL artifacts, reports, and verification.
+- `src/features/references/` for shared source/chunk/citation/retrieval schemas and versions.
+- `src/worker/references/` for deterministic query construction, filters, Vectorize/fixture clients, D1 resolution, validation, reranking, prompt context, and structured failure.
+- `migrations/0002_reference_provenance.sql` for source/chunk ledger, diagnosis retrieval runs, and frozen citation snapshots.
+- Existing AI schemas/prompts/client/orchestrator/validation for an explicit evidence-only versus authoritative-reference mode and supplied-citation-only output.
+- Persistence repositories/serialization/projections and saved/shared UI for frozen references and version provenance.
+- Wrangler environment/bindings, retrieval evaluations/tests, README, and reference architecture/security/provenance documentation.
+
+Acceptance criteria:
+
+- Only enabled checked-in manifest sources pass ingestion. Extraction/chunking is bounded and stable; vector IDs fit 64 bytes; unchanged content is not re-embedded; reports identify added/updated/reused/removed/failing chunks.
+- The versioned Vectorize binding uses the documented 1,024 dimensions and cosine metric. Runtime filters are deterministic and limited to pre-indexed metadata fields.
+- Every match resolves to an enabled D1 source/chunk whose ID, hash, corpus, URL, category, and allowlist identity validate before it reaches the model. Invalid, stale, duplicate, below-threshold, oversized, or unresolved matches are rejected.
+- Prompts separate investigation evidence, authoritative references, and the user question. Site-specific output still requires evidence IDs; protocol/reference output may cite only supplied citation IDs. Retrieved text remains delimited untrusted data.
+- Evidence-only diagnosis succeeds with no Vectorize binding. Reference failure or no qualifying result preserves evidence-only diagnosis and reports explicit retrieval status without web fallback or invented citations.
+- Saving a selected diagnosis persists its retrieval run, versions, sanitized query/hash/filter, ranks/scores/status, and frozen title/URL/heading/excerpt/hash. Saved/shared report rendering is independent of the current index.
+- Reference cards and compact provenance distinguish observed evidence, deterministic findings, technical references, and AI interpretation on desktop/500 px, keyboard, and reduced-motion paths.
+- Formatting, strict TypeScript, zero-warning lint, all Layer 1–8 regressions, ingestion/retrieval/citation/persistence/UI/evaluation tests, builds, dependency audit, D1 migration, local fixture/saved/shared smokes, and repository hygiene pass. Live Vectorize/embedding claims require valid Cloudflare authentication.
 
 ## Layer 3 implementation plan
 

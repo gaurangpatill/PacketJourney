@@ -1,0 +1,11 @@
+# Retrieval and citation provenance
+
+One authoritative diagnosis creates at most one embedding and one Vectorize query. A deterministic builder removes URL paths, query strings, fragments, and controls, then combines the bounded question with protocol terms, relevant evidence labels, deterministic finding categories, expertise depth, and explicit runtime limitations. Fixed intent rules choose categories and, for Cloudflare-runtime questions, the Cloudflare publisher. The model cannot choose filters, namespace, index, or query.
+
+Vectorize returns up to 12 candidates from namespace `technical-references`, filtered by indexed corpus/language/category/publisher metadata. Every ID must resolve to a D1 source/chunk. Validation checks the enabled manifest identity, canonical URL, category, publisher, content hash, corpus, metadata, score floor, excerpt, duplicate bounds, per-source limit, and 6,000-character total context before the text reaches Workers AI.
+
+The deterministic rerank score is 70% vector similarity, 10% category match, 10% bounded query-term overlap, 7% category-specific publisher authority, and 3% source-diversity credit. It is a hand-authored policy, not a learned reranker. At most four chunks and two per source survive. IETF is preferred for protocol semantics, MDN for platform behavior, Cloudflare for Cloudflare behavior, OWASP for hardening, web.dev for practical performance, and CA/Browser Forum for certificate policy.
+
+The prompt has separate investigation-evidence, technical-reference, and question blocks. Website claims still require investigation evidence IDs; supplied passages explain semantics and recommendations through exact citation IDs. References are untrusted text and cannot change system policy or tools. Generated URLs and unsupplied citation IDs fail validation.
+
+When a diagnosis is explicitly saved, D1 receives the retrieval run, sanitized query and hash, deterministic filters, model/index/corpus/retrieval versions, status and counts, plus each selected rank/score/reason and frozen publisher/category/title/URL/heading/excerpt/hash/version/timestamp. The diagnosis JSON contains the same validated snapshot for bounded rendering. Saved and shared reports read it without Vectorize, so reindexing cannot rewrite history. The UI labels it a reference snapshot and does not claim it is the latest source.

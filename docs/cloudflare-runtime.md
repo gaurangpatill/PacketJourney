@@ -74,3 +74,11 @@ DoH preflight and the later target fetch perform separate resolution operations.
 The independently attempted peer certificate connection is not the HTTP subrequest. When it succeeds, it proves only what that separate connection observed. When it fails, the CT fallback proves only that an issuance was logged. TLS protocol, cipher, ALPN, TCP timing, handshake timing, and the peer chain selected during Worker `fetch` remain unavailable in both cases.
 
 Browser Run adds a second connection made by Chromium. Its Performance API values describe that isolated page navigation, not the Worker fetch or a real user's session. Playwright request interception reduces unsafe navigation risk but cannot pin the Chromium socket to the DoH answer checked immediately beforehand.
+
+## Layer 9 Vectorize and embedding boundary
+
+The Worker binding queries `packet-journey-references-v1`; index creation, metadata-index creation, and corpus upsert remain controlled operator actions through Wrangler. The index is fixed at 1,024 dimensions and cosine because Vectorize dimensions and metric are immutable after creation. The selected Workers AI model is `@cf/qwen/qwen3-embedding-0.6b`; runtime rejects any output that is not exactly 1,024 numeric values.
+
+Vectorize filters use only pre-created string metadata indexes: `publisher`, `category`, `corpusVersion`, and `language`. Query `topK` is 12, well within current metadata-return limits, and compact metadata remains below the 10 KiB/vector limit. Full chunk text stays in D1. Local Wrangler development deliberately omits Vectorize and uses a visibly labeled fixture retriever; Vectorize is an always-remote service and primary tests use binding mocks.
+
+Workers AI embedding requests use the binding at runtime and the Cloudflare REST API only in the controlled ingestion CLI. AI Gateway remains applied to final text inference; reference embeddings are versioned and recorded separately. A reference outage is non-fatal to network evidence and evidence-only diagnosis.

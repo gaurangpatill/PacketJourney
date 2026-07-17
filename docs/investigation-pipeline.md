@@ -51,6 +51,24 @@ POST /api/v1/investigations/:id/diagnose
 
 Missing relevant evidence produces an inconclusive evidence-guard response without model inference. AI failure leaves the canonical investigation, deterministic findings, graph, and artifacts intact.
 
+Layer 9 extends only that diagnosis path:
+
+```text
+referenceMode = authoritative
+  → sanitize question and URL-bearing terms
+  → fixed intent/category/publisher filter
+  → one Workers AI query embedding
+  → one versioned Vectorize query
+  → resolve matches from D1 reference chunks
+  → allowlist/hash/corpus/relevance/budget validation
+  → deterministic rerank and deduplication
+  → separately delimited reference context
+  → evidence-ID and citation-ID output validation
+  → optional D1 frozen retrieval snapshot when explicitly saved
+```
+
+Reference retrieval cannot collect or modify site evidence. `referenceMode = none`, missing bindings, embedding/query/D1 failure, and no qualifying passage all preserve the existing evidence-only diagnosis behavior. Saved/shared reports render frozen citation data and never rerun retrieval.
+
 Layer 8 adds an explicit post-investigation persistence pipeline. It does not automatically save live runs or rerun a saved report:
 
 ```text

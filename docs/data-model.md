@@ -32,6 +32,7 @@ type DiagnoseInvestigationRequest = {
   expertiseMode: "beginner" | "developer" | "network-engineer";
   investigation: Investigation;
   selectedStageId?: string;
+  referenceMode?: "none" | "authoritative";
 };
 
 type DiagnoseInvestigationResponse = {
@@ -41,6 +42,8 @@ type DiagnoseInvestigationResponse = {
 ```
 
 `AiDiagnosis` is transient interpretation. Its findings/actions cite existing evidence IDs, deterministic-finding links cite existing finding IDs, and display instructions cite existing stage/evidence IDs. It distinguishes supported, likely, inconclusive, and unsupported conclusions, records uncertainty, model, prompt version, source, and generation time, and never mutates the submitted investigation. Zod validation plus cross-reference/category/causation rules reject the entire model result rather than adding partial arbitrary text.
+
+Layer 9 adds `technicalReferences` (model claims containing supplied citation IDs), server-owned `referenceCitations` (frozen validated display snapshots), and optional `retrievalMetadata` (run/status/query hash and controlled query, filters, dimensions, embedding/index/corpus/retrieval versions, counts, timestamp, and fixture marker). These remain diagnosis provenance and never become `EvidenceItem` or journey stages.
 
 The endpoint validates canonical shape but, without D1 or a signature, cannot attest that the client-submitted investigation originated from this Worker. `AiUsageSummary` contains bounded operational metadata and counts—not prompts, full evidence, or model responses.
 
@@ -99,6 +102,8 @@ Layer 8 does not add storage fields to `Investigation`. A persistence adapter pr
 - `counterfactual_results` stores at most one explicitly selected deterministic result and its source snapshot hash.
 - `share_links` stores only a token hash, inclusion policy, expiry/revocation, and coarse access metadata.
 - `investigation_artifacts` maps an authorized saved investigation to an opaque private R2 key and retention metadata.
+- `reference_sources` and `reference_chunks` store the normalized allowlisted corpus content and its independent embedding/corpus versions.
+- `diagnosis_reference_runs` and `diagnosis_reference_citations` freeze sanitized query/filter/version/ranking provenance and exact citation display data for one selected diagnosis.
 
 The persisted schema version is currently `1`. Serialization sorts object keys recursively and strips transient artifact URLs. Reads validate the version, parse the canonical runtime schema, and verify the stored hash before returning data. A duplicate exact snapshot is permitted as a distinct user-named entry and is surfaced as a warning rather than silently overwriting history.
 

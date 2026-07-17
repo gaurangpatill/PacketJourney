@@ -11,6 +11,8 @@ validated completed/meaningfully-partial Investigation
 → anonymous-owner history or dedicated read-only share projection
 ```
 
+When the selected diagnosis used authoritative retrieval, the same D1 batch also records a retrieval-run row and zero to four frozen citation rows. The stored diagnosis JSON contains validated frozen display data, while normalized tables preserve query/filter/rank/score/version provenance. Opening or sharing the saved snapshot never queries Vectorize.
+
 ## Ownership
 
 The Worker issues a 256-bit random `pj_installation` cookie with `HttpOnly`, `SameSite=Lax`, `Path=/`, one-year lifetime, and `Secure` outside local HTTP development. Only its SHA-256 hash is used as `owner_id`; the raw cookie is never accepted from JSON or stored in D1. This separates browser installations, not people. Clearing cookies loses access, another device cannot recover it, and anyone controlling the browser profile controls its saved records. It is not authentication.
@@ -32,7 +34,7 @@ Persistence errors do not alter the in-memory investigation. A snapshot is histo
 - List page: 20 by default, 50 maximum.
 - Saved screenshot: existing 1.5 MiB capture limit; 30-day saved retention metadata.
 
-These application bounds stay below D1's current 2 MB string/row limit. D1 migration versions, snapshot schema versions, counterfactual engine versions, and AI prompt versions are independent compatibility axes.
+These application bounds stay below D1's current 2 MB string/row limit. D1 migration, snapshot schema, counterfactual engine, AI prompt/model, embedding model, Vectorize index, corpus, and retrieval algorithm versions are independent compatibility axes.
 
 ## Deletion
 

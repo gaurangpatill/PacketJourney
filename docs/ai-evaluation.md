@@ -9,3 +9,7 @@ Prompt-injection strings are placed in page-title, DNS TXT, HTTP-header, console
 Primary tests use deterministic fake model responses and never require internet/model availability. A production-readiness smoke should make one real Workers AI request through AI Gateway, verify a Gateway log/latency event, inspect the validated diagnosis, and confirm that cache is skipped. That smoke is environment-dependent and must be reported separately rather than folded into deterministic pass counts.
 
 Evaluation favors abstention. A concise `inconclusive` answer with named missing evidence passes; a polished but unsupported causal diagnosis fails.
+
+Layer 9 adds a separate 15-case reference retrieval evaluation. It checks deterministic category filters, preferred authoritative publishers, required concepts, prohibited site-specific overclaims, stable reranking, duplicate/source limits, invalid embedding dimensions, explicit unavailability, allowlist identity, and invented citation rejection. Reference-grounded output must still cite investigation evidence for website claims; retrieving a relevant standard never increases the confidence of the underlying measurement.
+
+Fixture scores are deterministic test signals. Production readiness additionally requires one real embedding, Vectorize query, D1 resolution, grounded diagnosis, saved citation, and shared frozen snapshot using the exact deployed index/corpus versions. That external smoke is reported separately and is never inferred from fixture success.
