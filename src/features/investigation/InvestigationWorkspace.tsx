@@ -25,6 +25,7 @@ import { StageIcon } from "./StageIcon";
 import { BrowserEvidencePanels } from "./BrowserEvidencePanels";
 import { AiInvestigationPanel } from "./AiInvestigationPanel";
 import type { AiDiagnosis } from "./aiSchema";
+import { CounterfactualWorkspace } from "../counterfactual/CounterfactualWorkspace";
 
 const expertiseCopy: Record<ExpertiseMode, { label: string; intro: string }> = {
   beginner: {
@@ -228,6 +229,8 @@ export function InvestigationWorkspace({
           }, 0);
         }}
       />
+
+      <CounterfactualWorkspace investigation={investigation} expertise={expertise} />
 
       <section className="analysis-section section-shell">
         <div className="detail-tabs" role="tablist" aria-label="Investigation details">

@@ -5,9 +5,10 @@ import type { JourneyController } from "./useJourneyController";
 type JourneyTimelineProps = {
   graph: InvestigationGraph;
   controller: JourneyController;
+  onStageSelect?: (stageId: string, index: number) => void;
 };
 
-export function JourneyTimeline({ graph, controller }: JourneyTimelineProps) {
+export function JourneyTimeline({ graph, controller, onStageSelect }: JourneyTimelineProps) {
   const max = Math.max(0, graph.nodes.length - 1);
 
   return (
@@ -32,7 +33,12 @@ export function JourneyTimeline({ graph, controller }: JourneyTimelineProps) {
           max={max}
           step={1}
           value={Math.min(max, controller.revealedIndex)}
-          onChange={(event) => controller.scrubTo(Number(event.target.value))}
+          onChange={(event) => {
+            const index = Number(event.target.value);
+            controller.scrubTo(index);
+            const stageId = graph.nodes[index]?.id;
+            if (stageId) onStageSelect?.(stageId, index);
+          }}
           style={
             {
               "--timeline-progress": `${max ? (controller.revealedIndex / max) * 100 : 100}%`,
@@ -54,7 +60,10 @@ export function JourneyTimeline({ graph, controller }: JourneyTimelineProps) {
             type="button"
             role="listitem"
             className={controller.selectedNodeId === node.id ? "is-active" : undefined}
-            onClick={() => controller.scrubTo(index)}
+            onClick={() => {
+              controller.scrubTo(index);
+              onStageSelect?.(node.id, index);
+            }}
             aria-label={`Go to ${node.stage.title}`}
             key={node.id}
           >

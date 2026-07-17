@@ -332,7 +332,7 @@ export function JourneyCanvas({
                   <button
                     type="button"
                     data-node-id={node.id}
-                    className={`graph-node graph-node--${node.stage.type} is-${node.stage.status}${node.path === "secondary" ? " is-secondary" : ""}${node.confidence === "inferred" ? " is-inferred" : ""}${node.isBottleneck ? " is-bottleneck" : ""}${selected ? " is-selected" : ""}${emphasized ? " is-ai-emphasized" : ""}${dimmed ? " is-dimmed" : ""}`}
+                    className={`graph-node graph-node--${node.stage.type} is-${node.stage.status}${node.path === "secondary" ? " is-secondary" : ""}${node.confidence === "inferred" ? " is-inferred" : ""}${node.isBottleneck ? " is-bottleneck" : ""}${node.stage.simulation ? ` is-counterfactual is-change-${node.stage.simulation.state ?? "unchanged"}` : ""}${selected ? " is-selected" : ""}${emphasized ? " is-ai-emphasized" : ""}${dimmed ? " is-dimmed" : ""}`}
                     aria-label={accessibleNodeLabel(node.stage, expertise)}
                     aria-pressed={selected}
                     tabIndex={visible ? 0 : -1}
@@ -345,6 +345,10 @@ export function JourneyCanvas({
                       </i>
                       <b>{node.stage.status}</b>
                       {node.isBottleneck ? <em>BOTTLENECK</em> : null}
+                      {node.stage.simulation?.state &&
+                      node.stage.simulation.state !== "unchanged" ? (
+                        <em>SIM · {node.stage.simulation.state}</em>
+                      ) : null}
                     </span>
                     <span className="graph-node__title">{nodeTitle(node.stage, expertise)}</span>
                     <span className="graph-node__summary">
