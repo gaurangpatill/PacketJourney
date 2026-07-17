@@ -28,6 +28,13 @@
     },
   ],
   "browser": { "binding": "BROWSER" },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "packet-journey-local",
+      "migrations_dir": "migrations",
+    },
+  ],
   "r2_buckets": [
     {
       "binding": "BROWSER_ARTIFACTS",

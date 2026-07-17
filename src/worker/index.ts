@@ -3,6 +3,13 @@ import { errorResponse, WorkerError } from "./errors";
 import { logEvent } from "./logging";
 import { routeRequest } from "./router";
 
+function safeRequestPath(request: Request): string {
+  return new URL(request.url).pathname.replace(
+    /^(\/api\/v1\/shared-reports\/)[^/]+/,
+    "$1:opaque-token",
+  );
+}
+
 export default {
   async fetch(request, env): Promise<Response> {
     const requestId = crypto.randomUUID();
@@ -13,7 +20,7 @@ export default {
       logEvent("info", "request.completed", {
         requestId,
         method: request.method,
-        path: new URL(request.url).pathname,
+        path: safeRequestPath(request),
         status: response.status,
         durationMs: Math.round(performance.now() - startedAt),
       });

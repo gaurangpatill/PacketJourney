@@ -19,7 +19,11 @@
     "format:write": "prettier --write .",
     "preview": "vite preview",
     "deploy:preview": "wrangler deploy --env preview",
-    "deploy:production": "wrangler deploy"
+    "deploy:production": "wrangler deploy",
+    "db:migrate:local": "wrangler d1 migrations apply DB --local --config wrangler.local.jsonc",
+    "db:migrate:preview": "wrangler d1 migrations apply packet-journey-preview --remote --env preview",
+    "db:migrate:production": "wrangler d1 migrations apply packet-journey --remote",
+    "db:reset:local": "wrangler d1 execute DB --local --config wrangler.local.jsonc --command=\"DROP TABLE IF EXISTS artifact_cleanup_failures; DROP TABLE IF EXISTS investigation_artifacts; DROP TABLE IF EXISTS share_links; DROP TABLE IF EXISTS counterfactual_results; DROP TABLE IF EXISTS ai_diagnoses; DROP TABLE IF EXISTS investigations; DELETE FROM d1_migrations;\" && npm run db:migrate:local"
   },
   "dependencies": {
     "ipaddr.js": "^2.4.0",

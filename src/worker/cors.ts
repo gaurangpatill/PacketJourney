@@ -19,8 +19,9 @@ export function responseHeaders(request: Request, env: Env): Headers {
   const origin = request.headers.get("origin");
   if (origin && configuredOrigins(env).has(origin)) {
     headers.set("access-control-allow-origin", origin);
-    headers.set("access-control-allow-methods", "POST, OPTIONS");
+    headers.set("access-control-allow-methods", "GET, POST, PATCH, DELETE, OPTIONS");
     headers.set("access-control-allow-headers", "content-type");
+    headers.set("access-control-allow-credentials", "true");
     headers.set("access-control-max-age", "86400");
     headers.set("vary", "Origin");
   }

@@ -16,7 +16,20 @@ export type InvestigationErrorCode =
   | "not_found"
   | "timeout"
   | "upstream_error"
-  | "internal_error";
+  | "internal_error"
+  | "persistence_unavailable"
+  | "invalid_saved_investigation"
+  | "saved_investigation_not_found"
+  | "duplicate_saved_investigation"
+  | "serialization_too_large"
+  | "unsupported_schema_version"
+  | "share_unavailable"
+  | "share_expired"
+  | "share_revoked"
+  | "share_limit_exceeded"
+  | "artifact_promotion_failed"
+  | "database_failure"
+  | "migration_mismatch";
 
 export interface PublicError {
   code: InvestigationErrorCode;

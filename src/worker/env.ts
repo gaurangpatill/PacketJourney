@@ -7,6 +7,8 @@ export interface Env {
   BROWSER_INVESTIGATION_RATE_LIMITER?: RateLimit;
   BROWSER?: Fetcher;
   BROWSER_ARTIFACTS?: R2Bucket;
+  DB?: D1Database;
+  SHARE_RESOLUTION_RATE_LIMITER?: RateLimit;
   DNS_TIMEOUT_MS?: string;
   CERTIFICATE_TIMEOUT_MS?: string;
   CERTSPOTTER_API_TOKEN?: string;

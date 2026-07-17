@@ -36,6 +36,7 @@ import { SsrfPolicyError } from "./security/ssrf";
 import { UrlPolicyError } from "./security/url";
 import type { InvestigationAiClient } from "./ai/client";
 import { handleAiDiagnosis } from "./ai/route";
+import { handlePersistenceRoute } from "./persistence/route";
 
 const INVESTIGATION_PATH = "/api/v1/investigations/http";
 const MAX_REQUEST_BODY_LENGTH = 4_096;
@@ -139,6 +140,9 @@ export function createRouter(dependencies: RouterDependencies = {}) {
         { headers },
       );
     }
+
+    const persistenceResponse = await handlePersistenceRoute(request, env, headers);
+    if (persistenceResponse) return persistenceResponse;
 
     const diagnosisMatch = url.pathname.match(/^\/api\/v1\/investigations\/([^/]+)\/diagnose$/);
     if (diagnosisMatch) {
