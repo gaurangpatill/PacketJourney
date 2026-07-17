@@ -2,9 +2,13 @@
 
 Packet Journey is an AI-assisted network investigation environment that reconstructs, visualizes, and diagnoses the path from a URL to a rendered webpage.
 
-The project is being built in validated layers. Layers 1–4 are complete: a production-shaped frontend, an interactive journey graph, and a deterministic Cloudflare Worker investigation pipeline for DNS, certificate, redirects, HTTP, cache, and security evidence. Browser execution and AI are not represented as active features.
+The project is being built in validated layers. Layers 1–5 are complete: a production-shaped frontend, an interactive journey graph, and a deterministic Cloudflare Worker investigation pipeline for DNS, certificate, redirects, HTTP, browser resources, rendering milestones, screenshots, cache, and security evidence. AI remains explicitly unimplemented.
 
-![Packet Journey third-party dependency visualization](./docs/assets/journey-visualization.png)
+![Packet Journey browser-enabled journey](./docs/assets/browser-journey.png)
+
+| Resource investigation                                                    | Rendered-page evidence                                                                           |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| ![Packet Journey resource waterfall](./docs/assets/browser-waterfall.png) | ![Rendered public example page captured by Browser Run](./docs/assets/browser-rendered-page.jpg) |
 
 ## Current product experience
 
@@ -19,6 +23,9 @@ The project is being built in validated layers. Layers 1–4 are complete: a pro
 - Bounded A, AAAA, CNAME, CAA, NS, MX, and sanitized TXT diagnostics with TTLs, CNAME reconstruction, address-policy results, and resolver-reported DNSSEC metadata.
 - Independent certificate evidence with deterministic SAN coverage and validity checks; a clearly labeled Certificate Transparency fallback is used when a direct peer probe is unavailable.
 - Manual redirect tracing, response status and timing, allowlisted headers, cache/security findings, and partial-result journeys.
+- A real isolated Cloudflare Browser Run session with final browser URL, page title, document status, navigation/paint milestones, bounded resources, failures, console evidence, and cautious third-party classification.
+- Private R2 screenshot storage with opaque IDs, 24-hour access expiry, a read-only Worker route, secure image headers, and deliberate loading/failure states.
+- A searchable, sortable resource waterfall and evidence-driven browser/resource branches in the existing graph and timeline.
 - Deliberate loading, empty, invalid URL, blocked destination, missing investigation, TLS failure, and mobile states.
 
 The seven seeded demonstrations remain stable recorded examples. Live workspaces are labeled **Live network evidence** and contain only facts returned by deterministic tools or limited, explicitly labeled inferences with provenance.
@@ -33,17 +40,21 @@ flowchart LR
     DNS --> TLS[Bounded peer probe or labeled CT fallback]
     TLS --> R[Manual redirect tracer]
     R --> H[Allowlisted headers + timing]
-    H --> D[Deterministic cache/security rules]
-    D --> M[Validated Investigation schema]
+    H --> B[Cloudflare Browser Run]
+    B --> E[Bounded browser evidence]
+    B --> R2[Private R2 screenshot]
+    E --> D[Deterministic network/browser rules]
+    R2 --> M[Validated Investigation schema]
+    D --> M
     M --> UI
     DEMO[Recorded examples] --> UI
 ```
 
-The React client and Worker share strict TypeScript and Zod runtime contracts. The Worker never returns graph coordinates; a library-neutral client adapter derives graph nodes, relationships, primary/secondary paths, confidence, and bottlenecks. Cloudflare Workers performs bounded deterministic orchestration, with a native Rate Limiting binding protecting the endpoint. D1, R2, Durable Objects, Queues, Browser Rendering, Workers AI, AI Gateway, and Vectorize are not wired into Layer 4.
+The React client and Worker share strict TypeScript and Zod runtime contracts. The Worker never returns graph coordinates; a library-neutral client adapter derives graph nodes, relationships, primary/secondary paths, confidence, and bottlenecks. Cloudflare Workers performs bounded deterministic orchestration, Browser Run collects isolated page evidence, R2 stores screenshot bytes, and two native Rate Limiting bindings protect general and browser work. Queues were intentionally omitted because the bounded synchronous path is currently reliable; D1, Durable Objects, Workers AI, AI Gateway, and Vectorize are not wired in.
 
 ## Request lifecycle
 
-The Layer 4 lifecycle is intake → normalization → DNS records and public-address validation → independent certificate evidence for relevant HTTPS hosts → bounded manual redirects → HTTP header/timing collection → deterministic DNS/TLS/cache/security findings → canonical investigation validation → adaptive rendering. Completed evidence is retained when a later DNS, certificate, redirect, or HTTP step fails. See [the pipeline design](./docs/investigation-pipeline.md).
+The Layer 5 lifecycle is intake → normalization → DNS records and public-address validation → independent certificate evidence → bounded manual redirects → HTTP header/timing collection → isolated browser navigation with per-request safety checks → resource/performance/console collection → private R2 screenshot → deterministic findings → canonical validation → adaptive rendering. Completed network evidence is retained when Browser Run or R2 fails. See [the pipeline design](./docs/investigation-pipeline.md).
 
 ## Local development
 
@@ -54,7 +65,7 @@ npm install
 npm run dev
 ```
 
-`npm run dev` starts Vite on port 5173 and Wrangler on port 8787; Vite proxies `/api` to the Worker. Local development and tests require no Cloudflare credentials. Copy `.dev.vars.example` to `.dev.vars` only when overriding local variables. Limited unauthenticated Certificate Transparency lookup is suitable for evaluation; configure the optional Cert Spotter token for production use.
+`npm run dev` starts Vite on port 5173 and Wrangler on port 8787; Vite proxies `/api` to the Worker. Wrangler provides local Browser Run and R2 simulation, so local development and tests require no Cloudflare credentials. Copy `.dev.vars.example` to `.dev.vars` only when overriding local variables. Set `BROWSER_ENABLED=false` to verify the explicit HTTP-only degradation path. Limited unauthenticated Certificate Transparency lookup is suitable for evaluation; configure the optional Cert Spotter token for production use.
 
 Useful split commands:
 
@@ -76,7 +87,7 @@ npm run build
 npm audit
 ```
 
-The deterministic suite covers client and Worker URL handling, SSRF IP/hostname policy, DoH parsing, redirect chains and failures, header filtering, cache/security rules, infrastructure clues, canonical adaptation, API/CORS/error envelopes, graph behavior, accessibility interactions, and the seven recorded journeys. Main tests use mocked responses and do not require public Internet access.
+The deterministic suite covers client and Worker URL handling, SSRF policy, DNS/TLS/HTTP collection, Browser Run lifecycle/cleanup, browser navigation safety, resource classification/bounds, performance and console normalization, R2 storage/retrieval, browser findings, canonical adaptation, API/CORS/error envelopes, graph behavior, accessibility interactions, and recorded journeys. Main tests use mocked responses and do not require public Internet access.
 
 ## Deployment
 
@@ -89,6 +100,8 @@ npm run deploy:production
 
 Set `VITE_API_BASE_URL` at frontend build time when the API is on another origin. Configure `CORS_ALLOWED_ORIGINS` on the Worker as a comma-separated exact allowlist for those frontend origins.
 
+Before the first preview/production Worker deployment, create the private R2 buckets named in `wrangler.jsonc` and configure a one-day lifecycle deletion rule for the `browser-screenshots/` prefix. Browser Run must be enabled for the account. Wrangler CLI authentication is deployment tooling; the application never reads a Cloudflare API token.
+
 ## Environment variables
 
 - `VITE_API_BASE_URL` — optional public Worker origin; omitted for same-origin/proxied local requests.
@@ -99,12 +112,13 @@ Set `VITE_API_BASE_URL` at frontend build time when the API is on another origin
 - `DNS_TIMEOUT_MS` — optional 250–10,000 ms per-host DNS diagnostic bound; default 5,000 ms.
 - `CERTIFICATE_TIMEOUT_MS` — optional 250–10,000 ms per certificate mechanism; default 8,000 ms.
 - `CERTSPOTTER_API_TOKEN` — optional SSLMate Cert Spotter token. Store it with `wrangler secret put CERTSPOTTER_API_TOKEN`; never expose it to the client.
+- `BROWSER_ENABLED` — `true` or `false`; disables Browser Run cleanly while preserving the Layer 4 HTTP journey.
 
-No Cloudflare API token, storage binding, or AI model key is required for local Layer 4 development.
+`BROWSER`, `BROWSER_ARTIFACTS`, `INVESTIGATION_RATE_LIMITER`, and `BROWSER_RATE_LIMITER` are typed Wrangler bindings, not secrets. No Cloudflare API token or AI model key is required by application code.
 
 ## Security considerations
 
-Client URL validation is only a usability guard. The Worker independently rejects credentials, unsupported protocols, internal hostnames, private/reserved IPv4 and IPv6 ranges, IPv4-mapped bypasses, metadata addresses, and unsafe DNS answers. Every redirect is normalized and revalidated before following. Target bodies are never consumed, response headers use a non-sensitive allowlist, and time/redirect/header limits are explicit. See [the security model](./docs/security.md) for the remaining DNS-rebinding limitation.
+Client URL validation is only a usability guard. The Worker independently rejects credentials, unsupported protocols, internal hostnames, private/reserved IPv4 and IPv6 ranges, IPv4-mapped bypasses, metadata addresses, and unsafe DNS answers. Every HTTP and browser destination is revalidated before connection where the runtimes permit interception. Browser contexts contain no user credentials or cookies, target Worker bodies are never consumed, output is bounded and sanitized, and R2 has no public bucket or arbitrary-key route. See [the security model](./docs/security.md) for the remaining DNS-rebinding limitation and artifact-link boundary.
 
 ## Design decisions
 
@@ -119,22 +133,28 @@ Client URL validation is only a usability guard. The Worker independently reject
 - Use minimal `GET` plus immediate body cancellation instead of relying on inconsistent `HEAD` support.
 - Keep live HTTP results and recorded examples explicit; never silently substitute one for the other.
 - Apply a coarse 20-request/minute, per-location/client-network Worker Rate Limiting binding before diagnostic work; do not treat it as identity or billing accounting.
+- Run Browser Run only for a verified final document and protect it with a stricter three-request/minute abuse guard.
+- Keep screenshot bytes out of canonical JSON and behind an opaque, expiring, Worker-mediated R2 read route.
+- Defer Queues until measured production latency demonstrates that the bounded synchronous browser contract is unsuitable.
 
 ## Known limitations
 
 - DNS data is recursive resolver evidence, not an authoritative-traversal trace. `AD` records the resolver's authentication signal and is not a complete DNSSEC security verdict.
 - A direct `node:tls` peer probe can be unavailable under Workers socket policy. The fallback is a Certificate Transparency issuance, not proof of the certificate used by the target HTTP fetch.
-- Workers does not expose outbound fetch TCP time, TLS handshake time, cipher, ALPN, selected peer chain, origin-only time, or browser render timing.
+- Workers fetch does not expose outbound TCP time, TLS handshake time, cipher, ALPN, selected peer chain, or origin-only time. Browser metrics come from a separate isolated Browser Run session.
 - DoH preflight checks observed answers but cannot pin the target connection, so it reduces rather than eliminates DNS-rebinding risk.
 - Some targets reject or treat data-center/Worker requests differently from browser traffic.
-- AI commands, simulations, persistence, sharing, export, and authentication are not active.
-- No D1, R2, Durable Objects, Queues, Browser Rendering, Workers AI, AI Gateway, or Vectorize bindings exist yet.
+- Browser timings are one lab observation, not field performance; cross-origin timing policy and caching can make transfer bytes unavailable.
+- Browser request interception rechecks DNS but cannot pin Chromium's later connection to the checked answer, leaving a documented rebinding gap.
+- Screenshot links are opaque and short-lived but unauthenticated until the later identity layer; treat them as bearer links.
+- AI commands, simulations, persistence, sharing, export, authentication, and organization controls are not active.
+- No D1, Durable Objects, Queues, Workers AI, AI Gateway, or Vectorize integration exists yet.
 - Layout is optimized for directed acyclic request journeys. Defensive cyclic input rendering exists, but cycle-specific routing is not a Layer 2 feature.
 - Very large graphs are fit as an overview and may require user zoom; semantic clustering is deferred until real browser traces establish its rules.
 
 ## Roadmap
 
-The next milestone is Layer 5: browser investigation. It has not started. The remaining milestones are tracked in [the implementation plan](./docs/implementation-plan.md).
+The next milestone is Layer 6: a broader deterministic findings engine. It has not started. The remaining milestones are tracked in [the implementation plan](./docs/implementation-plan.md).
 
 ## Architecture and planning
 
@@ -149,3 +169,5 @@ The next milestone is Layer 5: browser investigation. It has not started. The re
 - [HTTP diagnostics](./docs/http-diagnostics.md)
 - [Cloudflare runtime](./docs/cloudflare-runtime.md)
 - [DNS and TLS diagnostics](./docs/dns-tls-diagnostics.md)
+- [Browser investigation](./docs/browser-investigation.md)
+- [Browser artifacts](./docs/browser-artifacts.md)

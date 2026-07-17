@@ -1,6 +1,6 @@
 # Deterministic HTTP diagnostics
 
-`POST /api/v1/investigations/http` remains the compatible ES-module Worker endpoint. Layer 4 orchestrates DNS and certificate diagnostics around this unchanged manual HTTP collector and returns one runtime-validated canonical investigation. It does not use AI.
+`POST /api/v1/investigations/http` remains the compatible ES-module Worker endpoint. Layer 5 preserves the manual HTTP collector, then hands only a successfully verified final public document URL to Browser Run. It returns one runtime-validated canonical investigation and does not use AI.
 
 ## Fetch behavior
 
@@ -50,3 +50,5 @@ Direct target values such as content type, encoding, length, server disclosure, 
 A redirect response remains evidence even if its destination is malformed, blocked, looping, excessive, or later times out. The adapter connects all completed stages to a terminal error stage, sets the investigation status to `failed`, and includes a structured `partialError`. No document-received stage appears when no final response was observed.
 
 DNS and certificate diagnostics do not change the HTTP evidence semantics. A certificate warning can coexist with a successful HTTP response because the certificate mechanism is independent of Worker `fetch`. See [dns-tls-diagnostics.md](./dns-tls-diagnostics.md) for that boundary.
+
+Browser diagnostics also do not rewrite HTTP evidence. The Worker document response retains its own status, allowlisted headers, and duration. Browser Run records a separate final URL, status, and Performance API timeline; a difference becomes a cautious evidence-linked finding. Browser failure preserves the completed HTTP journey and never silently substitutes recorded data. See [browser-investigation.md](./browser-investigation.md).

@@ -66,7 +66,7 @@ In Layer 1, the orchestrator boundary is represented by seeded mock investigatio
 - [x] Layer 2 — Adaptive journey visualization
 - [x] Layer 3 — Deterministic HTTP investigation and SSRF-safe fetch
 - [x] Layer 4 — DNS and TLS investigation
-- [ ] Layer 5 — Browser investigation
+- [ ] Layer 5 — Browser investigation (in progress: audit and runtime decisions complete)
 - [ ] Layer 6 — Deterministic findings engine
 - [ ] Layer 7 — Evidence-grounded AI investigation
 - [ ] Layer 8 — Counterfactual debugging
@@ -84,7 +84,7 @@ In Layer 1, the orchestrator boundary is represented by seeded mock investigatio
 | Runtime validation | Zod schemas shared by UI and Worker        | Validate Worker bundle size in Layer 3.                                       |
 | Backend            | Cloudflare Worker with small typed tools   | Validate local Worker runtime and outbound API constraints in Layer 3.        |
 | Live state         | Durable Object per active investigation    | Validate pricing and hibernation behavior in Layer 9.                         |
-| Browser jobs       | Browser Rendering via Queue                | Validate account limits and API availability in Layer 5.                      |
+| Browser jobs       | Bounded synchronous Browser Run session    | Add Queues only after measured latency or retry behavior requires async work. |
 | AI                 | Workers AI through AI Gateway, strict JSON | Validate chosen model's structured-output reliability in Layer 7.             |
 
 ## Layer 3 implementation plan
@@ -154,9 +154,43 @@ Runtime decisions and limits to validate:
 - The independent TLS probe is not the HTTP subrequest. Platform socket restrictions, runtime incompatibilities, or target behavior may make certificate evidence unavailable even while `fetch` succeeds; this produces a warning/unavailable state, not a certificate-validity claim.
 - Normal Worker `fetch` does not expose its outbound TLS protocol, cipher, ALPN, peer chain, or phase timing. Only total probe duration and HTTP subrequest duration are measured.
 
+## Layer 5 implementation plan
+
+Objective: extend the existing deterministic Worker investigation with one isolated Cloudflare Browser Run session for the final verified public URL. The session will collect bounded navigation, paint, resource, failure, console, and screenshot evidence; store screenshot bytes in private R2; and return only normalized evidence and protected artifact metadata through the canonical `Investigation` contract. AI, persistence, authentication, collaboration, and Layer 6+ work remain out of scope.
+
+Likely files:
+
+- `src/worker/browser/` for Playwright binding access, lifecycle cleanup, navigation and subresource policy enforcement, normalized browser types, resource/console collection, timing extraction, classification, aggregation, limits, and structured errors.
+- `src/worker/artifacts/r2.ts` for opaque screenshot keys, bounded R2 writes, expiry metadata, and Worker-mediated reads.
+- `src/worker/diagnostics/orchestrator.ts`, `types.ts`, `router.ts`, and `env.ts` for the optional browser dependency, browser-specific abuse limit, synchronous final-URL orchestration, artifact route, and partial-result behavior.
+- `src/worker/findings/browserFindings.ts` and `src/worker/adapters/investigation.ts` for evidence-linked findings and canonical browser/resource/third-party stages without graph-library types.
+- `src/features/investigation/schema.ts`, workspace panels, resource waterfall, screenshot surface, presentation helpers, and focused component tests for browser evidence.
+- `wrangler.jsonc`, `package.json`, browser/R2 fixtures, and deterministic Worker integration tests.
+- `README.md`, existing architecture/security/pipeline/runtime/data-model diagnostics, and new browser-investigation and artifact documents.
+
+Acceptance criteria:
+
+- The compatible `POST /api/v1/investigations/http` endpoint still returns one runtime-validated investigation. DNS, TLS, redirects, HTTP, cache, and security evidence remain intact when the browser binding, launch, navigation, collection, screenshot, R2 write, or cleanup fails.
+- Cloudflare Browser Run is accessed through a typed Worker binding and the current `@cloudflare/playwright` package. Every launched browser, context, and page is closed in `finally`; navigation, collection, screenshot, and total session work have strict deadlines.
+- Only the final URL already accepted by the Worker HTTP/SSRF pipeline is navigated. Top-level redirects and subresources are intercepted, normalized, DNS-validated through the shared resolver, and blocked on unsupported protocols, internal names, or prohibited addresses. The documented DNS time-of-check/time-of-use gap remains explicit.
+- Browser evidence distinguishes its one lab session from Worker fetch evidence and includes requested/final URL, document response, title, viewport, readiness, DOMContentLoaded/load/paint metrics where observed, bounded resource records, failures, console errors/warnings, aggregates, and collection truncation state.
+- Resources use deterministic type normalization, registrable-domain-aware first/third-party classification, cautious bounded third-party categories, stable deduplication, and deterministic grouping. The graph keeps the main browser path primary and branches only high-value failures and aggregate resource/dependency groups.
+- The screenshot uses a fixed viewport and bounded WebP/JPEG output, is stored only through a private R2 binding under a cryptographically opaque generated ID, and appears in JSON only as metadata. A read-only Worker route derives the internal key, rejects expired artifacts, emits safe content headers, and never exposes listing, write, delete, or raw-key operations.
+- Browser-specific rate limiting runs before launch. No cookies, credentials, user scripts, form input, clicks, HTML bodies, or cross-session browser state are accepted or retained.
+- Screenshot, resource waterfall, filtering/search, failure, missing-artifact, and unavailable-browser states are responsive, keyboard accessible, and visually subordinate to the journey graph.
+- Formatting, strict TypeScript, zero-warning ESLint, deterministic unit/integration/component tests, frontend and Worker builds, dependency audit, local Worker/combined fixture smoke tests, R2 artifact tests, and all Layer 1–4 regressions pass.
+
+Validated runtime decisions:
+
+- Browser Run (the current name for Browser Rendering) supports a Worker browser binding and browser sessions through Cloudflare's Playwright fork. Playwright is selected because navigation routing, request/response/failure events, console events, performance evaluation, and screenshot capture must be coordinated within one session.
+- A 20-second navigation deadline and 25-second browser-investigation deadline stay below Browser Run's default 60-second inactivity timeout. Each request launches an isolated context and closes it immediately; session reuse and Durable Objects are unnecessary for this evidence-isolation model.
+- Synchronous orchestration is appropriate for the first bounded single-page version. Queues would add status, retry, idempotency, and persistence complexity without current evidence that the request cannot complete reliably. The browser result remains an optional tail after verified HTTP diagnostics.
+- R2 is justified immediately for screenshot bytes, while resource and console summaries remain bounded JSON evidence. Local Wrangler uses simulated R2; production and preview use named private buckets. Bucket lifecycle configuration should delete artifacts after 24 hours, while the Worker retrieval route independently enforces the recorded expiry.
+- Browser Run local support is not presented as a fixture fallback. Dependency-injected browser fixtures exercise local tests; a missing/remote binding produces an explicit unavailable browser stage. A live preview smoke test requires Cloudflare account access and will be reported separately if credentials are unavailable.
+
 ## Risks and runtime limitations
 
-- Browser Rendering, Workers AI, R2, D1, Queues, Durable Objects, and Vectorize require Cloudflare bindings and account credentials. Local deterministic fixtures must remain first-class.
+- Browser Run and R2 require Cloudflare account features for preview/production, while Wrangler provides local bindings. Workers AI, D1, Queues, Durable Objects, and Vectorize remain later-layer services. Deterministic fixtures stay first-class.
 - Workers expose constrained outbound sockets, but Cloudflare directs HTTP ports such as 443 through `fetch` and applies destination restrictions. The independent port-443 peer probe therefore degrades to documented Certificate Transparency issuance evidence when direct peer inspection is unavailable; outbound-fetch TLS session details remain unavailable.
 - Recursive DNS APIs may omit authoritative traversal details or per-record TTL behavior. Every field must retain its source and collection time.
 - Browser resource timing can be incomplete because of cross-origin timing restrictions, cached resources, service workers, and browser API limits.
@@ -307,4 +341,42 @@ Known limitations:
 - Cloudflare's socket policy can prevent a direct port-443 peer probe. Cert Spotter then supplies bounded public CT issuance data; this cannot prove which certificate a site currently serves and may be rate-limited without an optional secret token.
 - DoH validation still cannot pin the later Worker fetch to an observed address, so the documented DNS-rebinding time-of-check/time-of-use gap remains.
 - DNS and certificate probes are bounded and deduplicated rather than exhaustive across arbitrarily long redirect chains.
-- Browser Rendering, AI, D1, Durable Objects, Queues, R2, Vectorize, authentication, persistence, collaboration, and counterfactual debugging remain unimplemented. Layer 5 has not started.
+- AI, D1, Durable Objects, Queues, Vectorize, authentication, persistence, collaboration, and counterfactual debugging remained unimplemented at the Layer 4 handoff.
+
+### Layer 5 — Browser investigation on Cloudflare (complete, 2026-07-17)
+
+Implemented:
+
+- Typed Cloudflare Browser Run binding using `@cloudflare/playwright`, an isolated context/page, fixed viewport and user agent, service-worker/download blocking, structured lifecycle logs, 20-second navigation and 25-second browser deadlines, and page/context/browser cleanup in `finally`.
+- Browser navigation and subresource interception that reuses the canonical URL, DNS, and IP policy; blocks unsupported top-level protocols and prohibited destinations; bounds redirects; records blocked requests; and documents the remaining Chromium DNS time-of-check/time-of-use gap.
+- Bounded page title/final URL/document status, Navigation and Paint Performance API metrics, resources, failures, console warnings/errors, render-blocking candidates, registrable-domain party classification, cautious third-party categories, aggregate transfer values, and explicit truncation.
+- Private R2 screenshot storage under UUID-derived keys with a 1.5 MB cap, metadata-only canonical references, 24-hour access expiry, secure response headers, and a read-only Worker-mediated route with no list/write/delete/raw-key surface.
+- Deterministic evidence-linked browser findings for availability, timeouts, browser/Worker URL differences, payload size, JavaScript size, third-party volume, failed critical candidates, render-blocking candidates, slow lab FCP, console errors, and partial screenshots without unsupported causation.
+- Canonical browser, completion, resource, and third-party journey stages; primary/secondary graph adaptation; timeline/inspector integration; browser metrics; and preservation of all Layer 1–4 evidence on browser or artifact failure.
+- Responsive rendered-page and searchable/sortable resource-waterfall panels with keyboard-operable controls and deliberate loading, empty, expiry, and retrieval-failure states.
+- Updated Browser Run/R2 architecture, security, runtime, pipeline, data-model, privacy, retention, local-development, testing, and Queue-decision documentation plus live local README screenshots.
+- No Queue: measured bounded synchronous investigation completed reliably, so job identity, polling/streaming, retries, idempotency, and cancellation complexity were not introduced without evidence of need.
+
+Validation:
+
+- `npm run format` — passed.
+- `npm run typecheck` — passed with strict and unchecked-index rules.
+- `npm run lint` — passed with zero warnings.
+- `npm run test` — 212 tests passed across 31 files, including all Layer 1–4 regressions.
+- `npm run build:web` — passed; 378.68 kB JavaScript / 111.62 kB gzip and 46.28 kB CSS / 9.64 kB gzip.
+- `npm run build:worker` — passed; 3,816.61 KiB upload / 758.58 KiB gzip with Browser Run, private R2, and two Rate Limiting bindings recognized.
+- `npm audit --audit-level=low` — zero production or development vulnerabilities.
+- Local Worker smoke — health 200, loopback rejection 403, live public `example.com` investigation 200, Browser Run launch/navigation/cleanup, one canonical browser/resource path, and a 17,572-byte R2 screenshot verified.
+- Combined Vite/Worker smoke — SPA 200, proxied live investigation completed, protected artifact GET/HEAD returned JPEG with private caching, `nosniff`, sandbox CSP, and no raw R2 key.
+- Fixture smoke — browser binding/launch/page/navigation/timeout/blocked/cleanup paths, bounded resource aggregation, deterministic findings, and R2 write/missing/failure/expiry/retrieval paths passed without public Internet dependency.
+- Manual headless Chrome review — 1440 × 1800 and 500 × 1600 live workspaces checked for graph hierarchy, browser labels, screenshot, waterfall, metrics, toolbar containment, and horizontal overflow. Component tests additionally exercised filtering, screenshot failure, keyboard graph/timeline synchronization, and reduced motion.
+- Preview deployment — not performed because the available Wrangler authentication token was expired and the non-interactive environment was not logged in; no credential was added or committed.
+
+Known limitations:
+
+- Browser values are one isolated lab observation, not real-user monitoring or a Lighthouse score. Cross-origin timing policy and caching can make transfer sizes unavailable.
+- Request interception validates DNS before allowing Chromium traffic but cannot pin the later connection to that exact answer. The documented rebinding time-of-check/time-of-use gap remains.
+- Browser Run plan concurrency and daily browser-minute quotas apply independently of Packet Journey's stricter three-request/minute abuse guard.
+- Screenshot access uses opaque 24-hour bearer references because authentication/ownership do not exist yet. Production R2 buckets still require a one-day lifecycle deletion rule for physical cleanup.
+- Synchronous orchestration is bounded but should be reevaluated using production traces before adding Queues. No retry/job/polling contract exists.
+- Workers AI, AI Gateway, Vectorize, D1, Durable Objects, Queues, authentication, persistence, collaboration, organization support, and counterfactual debugging remain unimplemented. Layer 6 has not started.

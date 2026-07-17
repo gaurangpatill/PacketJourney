@@ -1,6 +1,6 @@
 # DNS and TLS diagnostics
 
-Layer 4 extends the existing Worker endpoint with deterministic DNS and certificate evidence. It does not use AI, execute a browser, or expose unrestricted network primitives.
+Layer 4 established deterministic DNS and certificate evidence. Layer 5 preserves these modules unchanged and executes Browser Run only after their public-address policy and the HTTP redirect pipeline produce a verified final document. No AI or unrestricted network primitive is used.
 
 ## DNS source and query flow
 
@@ -20,7 +20,7 @@ This is recursive-resolver evidence, not an authoritative delegation walk. Packe
 
 DNS diagnostics, initial URL validation, every redirect, and certificate eligibility share `src/worker/security/ip.ts` and the same SSRF policy. IPv4-mapped IPv6 addresses are reduced to their mapped range decision. If any observed destination answer is private, loopback, link-local, metadata, carrier-grade NAT, multicast, reserved, or otherwise prohibited, network access fails closed. Mixed public/prohibited answers are not treated as safe.
 
-DoH validation and Worker `fetch` are separate resolution events. Fetch does not expose or pin its peer address, leaving a documented DNS-rebinding time-of-check/time-of-use gap. Redirect revalidation and fail-closed answers are defense in depth, not a perfect rebinding guarantee.
+DoH validation and Worker `fetch` are separate resolution events. Fetch does not expose or pin its peer address, leaving a documented DNS-rebinding time-of-check/time-of-use gap. Browser Run interception reuses the same policy but likewise cannot pin Chromium's later socket to the checked answer. Redirect and request revalidation are defense in depth, not a perfect rebinding guarantee.
 
 ## Certificate mechanisms
 

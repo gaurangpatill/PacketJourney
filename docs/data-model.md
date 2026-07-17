@@ -9,7 +9,7 @@ The canonical investigation model distinguishes observations from conclusions.
 
 Runtime schemas are authoritative. TypeScript types are inferred from those schemas so persisted data, Worker responses, fixtures, and UI state cannot drift silently.
 
-The `live-http` scenario discriminator remains the backward-compatible name for the versioned live endpoint, now containing Layer 4 DNS and certificate stages as well as HTTP. `mock: false` identifies live Worker results; the existing seven scenario discriminators remain recorded examples with `mock: true`. Scenario is descriptive metadata and never drives graph layout.
+The `live-http` scenario discriminator remains the backward-compatible name for the versioned live endpoint, now containing DNS, certificate, HTTP, and browser stages. `mock: false` identifies live Worker results; the existing seven scenario discriminators remain recorded examples with `mock: true`. Scenario is descriptive metadata and never drives graph layout.
 
 The versioned API validates both envelopes:
 
@@ -24,7 +24,31 @@ type InvestigationErrorResponse = {
 };
 ```
 
-DNS query/record/alias/address results, certificate observations, and HTTP diagnostic types are internal Worker contracts. The adapter maps them into evidence and stages; resolver responses, redirect indices, allowlisted headers, cache classifications, security checks, and error states do not leak visualization positions into the domain model.
+DNS query/record/alias/address results, certificate observations, HTTP diagnostics, Browser Run results, and R2 storage operations are internal Worker contracts. The adapter maps them into evidence and stages; resolver responses, redirects, headers, browser resources, cache/security classifications, and errors do not leak visualization positions into the domain model.
+
+Browser evidence has its own requested/final URL, status, readiness, navigation metrics, bounded resources, aggregate summary, console entries, blocked requests, structured errors, collection timestamps, and limitations. Resource groups become ordinary `resource` or `third-party` stages with semantic `branch` hints. Worker document receipt remains an `origin` stage, so the schema never implies rendering when Browser Run was unavailable.
+
+`InvestigationMetrics` can contain browser-relative DOMContentLoaded, load, FCP, LCP, browser duration, request count, third-party count, and bounded transfer totals. Missing Performance API values stay absent; they are not derived from Worker fetch timing.
+
+## Artifact references
+
+`ArtifactReference` contains metadata, never bytes or an internal storage key:
+
+```ts
+type ArtifactReference = {
+  id: string; // opaque UUID
+  type: "screenshot" | "report" | "waterfall" | "other";
+  storage: "r2" | "inline" | "external";
+  contentType?: string;
+  sizeBytes?: number;
+  createdAt?: string;
+  expiresAt?: string;
+  access?: "worker-mediated" | "inline" | "external";
+  url?: string; // bounded Worker route, never an R2 object key
+};
+```
+
+Layer 5 uses only `type: "screenshot"`, `storage: "r2"`, and `access: "worker-mediated"`. Existing recorded fixture artifacts remain schema compatible. Artifact expiry is access metadata, not evidence that R2 has physically deleted an object; the production bucket lifecycle supplies physical retention cleanup.
 
 DNS records are verified resolver observations. CNAME-chain reconstruction, address-range classification, and human-readable summaries are deterministic inferences. DNSSEC evidence stores the resolver's `AD`/status/comment source; a finding may say the resolver reported authentication or failure, but never promotes that into a complete domain-security verdict.
 
@@ -40,4 +64,4 @@ The `branch` field remains a semantic grouping hint for parallel work, not a coo
 
 Simulated evidence will use a separate simulation marker and will never overwrite collected evidence. AI-generated explanations remain conclusions even when they cite verified evidence.
 
-For live results, raw resolver records, peer/CT fields, and HTTP status/header/location observations are `verified` relative to their named source. Parsed cache dispositions, hostname coverage, alias chains, address classifications, and vendor/intermediary rules are `inferred`. Findings remain conclusions even when confidence is 1.0; every finding references existing evidence IDs and the schema rejects dangling references.
+For live results, raw resolver records, peer/CT fields, HTTP status/header/location observations, and browser event/Performance API values are `verified` relative to their named source. Parsed cache dispositions, hostname coverage, alias chains, address classifications, registrable-domain party classification, and vendor/intermediary categories are `inferred`. Findings remain conclusions even when confidence is 1.0; every finding references existing evidence IDs and the schema rejects dangling references.
