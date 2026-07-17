@@ -92,6 +92,7 @@ export const investigationSchema = z
       "tls-warning",
       "missing-cache",
       "edge-cache-simulation",
+      "live-http",
     ]),
     url: z.string().url(),
     normalizedUrl: z.string().url(),

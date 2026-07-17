@@ -4,12 +4,12 @@ import { logEvent } from "./logging";
 import { routeRequest } from "./router";
 
 export default {
-  fetch(request, env): Response {
+  async fetch(request, env): Promise<Response> {
     const requestId = crypto.randomUUID();
     const startedAt = performance.now();
 
     try {
-      const response = routeRequest(request, env);
+      const response = await routeRequest(request, env);
       logEvent("info", "request.completed", {
         requestId,
         method: request.method,

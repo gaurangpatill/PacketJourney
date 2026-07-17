@@ -4,7 +4,7 @@ import { routeRequest } from "./router";
 
 describe("Worker router foundation", () => {
   it("reports a typed health response", async () => {
-    const response = routeRequest(new Request("https://api.example/health"), {
+    const response = await routeRequest(new Request("https://api.example/health"), {
       ENVIRONMENT: "test",
     });
 
@@ -16,14 +16,14 @@ describe("Worker router foundation", () => {
     });
   });
 
-  it("allows only explicitly configured CORS origins", () => {
+  it("allows only explicitly configured CORS origins", async () => {
     const request = new Request("https://api.example/health", {
       headers: { origin: "https://packetjourney.example" },
     });
-    const allowed = routeRequest(request, {
+    const allowed = await routeRequest(request, {
       CORS_ALLOWED_ORIGINS: "https://packetjourney.example",
     });
-    const denied = routeRequest(request, {
+    const denied = await routeRequest(request, {
       CORS_ALLOWED_ORIGINS: "https://different.example",
     });
 
@@ -35,7 +35,7 @@ describe("Worker router foundation", () => {
   });
 
   it("returns a structured not-found error", async () => {
-    const response = routeRequest(new Request("https://api.example/nope"), {});
+    const response = await routeRequest(new Request("https://api.example/nope"), {});
 
     expect(response.status).toBe(404);
     await expect(response.json()).resolves.toEqual({
