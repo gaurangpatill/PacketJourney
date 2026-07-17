@@ -11,6 +11,20 @@ export interface Env {
   CERTIFICATE_TIMEOUT_MS?: string;
   CERTSPOTTER_API_TOKEN?: string;
   BROWSER_ENABLED?: string;
+  AI?: Ai;
+  AI_ENABLED?: string;
+  AI_FIXTURE_MODE?: string;
+  AI_GATEWAY_ID?: string;
+  AI_MODEL?: string;
+  AI_FALLBACK_MODEL?: string;
+  AI_MAX_REQUESTS?: string;
+  AI_MAX_TOOL_ROUNDS?: string;
+  AI_MAX_INPUT_CHARS?: string;
+  AI_MAX_OUTPUT_CHARS?: string;
+  AI_MAX_OUTPUT_TOKENS?: string;
+  AI_TIMEOUT_MS?: string;
+  AI_INVESTIGATION_RATE_LIMITER?: RateLimit;
+  AI_INVESTIGATION_HASH_RATE_LIMITER?: RateLimit;
 }
 
 export interface RuntimeLimits {

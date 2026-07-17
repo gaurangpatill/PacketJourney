@@ -34,6 +34,8 @@ import {
 } from "./security/dns";
 import { SsrfPolicyError } from "./security/ssrf";
 import { UrlPolicyError } from "./security/url";
+import type { InvestigationAiClient } from "./ai/client";
+import { handleAiDiagnosis } from "./ai/route";
 
 const INVESTIGATION_PATH = "/api/v1/investigations/http";
 const MAX_REQUEST_BODY_LENGTH = 4_096;
@@ -45,6 +47,7 @@ export interface RouterDependencies {
   dnsClient?: DnsQueryClient;
   certificateInspector?: CertificateInspector;
   browserInvestigator?: BrowserInvestigator;
+  aiClient?: InvestigationAiClient;
 }
 
 function requestError(message: string): WorkerError {
@@ -135,6 +138,42 @@ export function createRouter(dependencies: RouterDependencies = {}) {
         },
         { headers },
       );
+    }
+
+    const diagnosisMatch = url.pathname.match(/^\/api\/v1\/investigations\/([^/]+)\/diagnose$/);
+    if (diagnosisMatch) {
+      if (request.method !== "POST") {
+        headers.set("allow", "POST, OPTIONS");
+        return errorResponse(
+          {
+            code: "method_not_allowed",
+            message: "Use POST to diagnose an investigation.",
+            retryable: false,
+          },
+          405,
+          headers,
+        );
+      }
+      try {
+        let investigationId: string;
+        try {
+          investigationId = decodeURIComponent(diagnosisMatch[1] ?? "");
+        } catch {
+          throw requestError("The investigation ID is malformed.");
+        }
+        const response = await handleAiDiagnosis({
+          request,
+          env,
+          investigationId,
+          client: dependencies.aiClient,
+        });
+        for (const [name, value] of headers) response.headers.set(name, value);
+        return response;
+      } catch (error) {
+        const response = knownErrorResponse(error, headers);
+        if (response) return response;
+        throw error;
+      }
     }
 
     const artifactMatch = url.pathname.match(/^\/api\/v1\/artifacts\/screenshots\/([0-9a-f-]+)$/i);

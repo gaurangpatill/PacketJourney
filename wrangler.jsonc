@@ -24,9 +24,28 @@
         "period": 60,
       },
     },
+    {
+      "name": "AI_INVESTIGATION_RATE_LIMITER",
+      "namespace_id": "2391005",
+      "simple": {
+        "limit": 8,
+        "period": 60,
+      },
+    },
+    {
+      "name": "AI_INVESTIGATION_HASH_RATE_LIMITER",
+      "namespace_id": "2391006",
+      "simple": {
+        "limit": 3,
+        "period": 60,
+      },
+    },
   ],
   "browser": {
     "binding": "BROWSER",
+  },
+  "ai": {
+    "binding": "AI",
   },
   "r2_buckets": [
     {
@@ -36,12 +55,18 @@
   ],
   "vars": {
     "ENVIRONMENT": "production",
+    "AI_ENABLED": "true",
+    "AI_GATEWAY_ID": "default",
+    "AI_MODEL": "llama-3.3-70b-fast",
   },
   "env": {
     "preview": {
       "name": "packet-journey-api-preview",
       "vars": {
         "ENVIRONMENT": "preview",
+        "AI_ENABLED": "true",
+        "AI_GATEWAY_ID": "default",
+        "AI_MODEL": "llama-3.3-70b-fast",
       },
       "ratelimits": [
         {
@@ -60,9 +85,28 @@
             "period": 60,
           },
         },
+        {
+          "name": "AI_INVESTIGATION_RATE_LIMITER",
+          "namespace_id": "2391007",
+          "simple": {
+            "limit": 8,
+            "period": 60,
+          },
+        },
+        {
+          "name": "AI_INVESTIGATION_HASH_RATE_LIMITER",
+          "namespace_id": "2391008",
+          "simple": {
+            "limit": 3,
+            "period": 60,
+          },
+        },
       ],
       "browser": {
         "binding": "BROWSER",
+      },
+      "ai": {
+        "binding": "AI",
       },
       "r2_buckets": [
         {

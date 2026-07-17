@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "concurrently --kill-others-on-fail --names web,worker --prefix-colors cyan,magenta \"npm:dev:web\" \"npm:dev:worker\"",
     "dev:web": "vite",
-    "dev:worker": "wrangler dev --port 8787",
+    "dev:worker": "wrangler dev --config wrangler.local.jsonc --port 8787",
+    "dev:worker:ai": "wrangler dev --port 8787",
     "build": "npm run build:web && npm run build:worker",
     "build:web": "tsc -b && vite build",
     "build:worker": "wrangler deploy --dry-run --env=\"\"",

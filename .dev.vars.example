@@ -4,3 +4,8 @@ CORS_ALLOWED_ORIGINS=http://localhost:5173
 # BROWSER_ENABLED=false
 # Optional for production-volume Certificate Transparency lookup:
 # CERTSPOTTER_API_TOKEN=
+# Explicit local fixture mode: no model call; rejected outside development and test.
+AI_FIXTURE_MODE=true
+AI_ENABLED=true
+AI_GATEWAY_ID=default
+AI_MODEL=llama-3.3-70b-fast
