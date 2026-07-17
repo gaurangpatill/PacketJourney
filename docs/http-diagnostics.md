@@ -1,11 +1,11 @@
 # Deterministic HTTP diagnostics
 
-Layer 3 exposes `POST /api/v1/investigations/http` from an ES-module Cloudflare Worker. The endpoint accepts `{ "url": string }` and returns either a runtime-validated canonical investigation or a structured public error. It does not use AI.
+`POST /api/v1/investigations/http` remains the compatible ES-module Worker endpoint. Layer 4 orchestrates DNS and certificate diagnostics around this unchanged manual HTTP collector and returns one runtime-validated canonical investigation. It does not use AI.
 
 ## Fetch behavior
 
 - Normalize once with the shared Worker normalizer and validate the initial destination before target I/O.
-- Preflight hostname A and AAAA answers through `https://cloudflare-dns.com/dns-query` and reject any non-public answer.
+- Reuse the Layer 4 typed DoH client and shared address resolver; reject any observed non-public A or AAAA answer before each target fetch.
 - Send a minimal `GET` because public `HEAD` behavior is inconsistent.
 - Set only `Accept`, `Accept-Encoding`, and a Packet Journey `User-Agent`; never forward user headers, credentials, cookies, or payloads.
 - Set `redirect: "manual"` and `cache: "no-store"`.
@@ -48,3 +48,5 @@ Direct target values such as content type, encoding, length, server disclosure, 
 ## Partial results
 
 A redirect response remains evidence even if its destination is malformed, blocked, looping, excessive, or later times out. The adapter connects all completed stages to a terminal error stage, sets the investigation status to `failed`, and includes a structured `partialError`. No document-received stage appears when no final response was observed.
+
+DNS and certificate diagnostics do not change the HTTP evidence semantics. A certificate warning can coexist with a successful HTTP response because the certificate mechanism is independent of Worker `fetch`. See [dns-tls-diagnostics.md](./dns-tls-diagnostics.md) for that boundary.

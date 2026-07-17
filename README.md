@@ -2,7 +2,7 @@
 
 Packet Journey is an AI-assisted network investigation environment that reconstructs, visualizes, and diagnoses the path from a URL to a rendered webpage.
 
-The project is being built in validated layers. Layers 1–3 are complete: a production-shaped frontend, an interactive journey graph, and a real deterministic HTTP investigation API running on Cloudflare Workers. DNS/TLS phase inspection, browser execution, and AI are not represented as active features.
+The project is being built in validated layers. Layers 1–4 are complete: a production-shaped frontend, an interactive journey graph, and a deterministic Cloudflare Worker investigation pipeline for DNS, certificate, redirects, HTTP, cache, and security evidence. Browser execution and AI are not represented as active features.
 
 ![Packet Journey third-party dependency visualization](./docs/assets/journey-visualization.png)
 
@@ -15,20 +15,23 @@ The project is being built in validated layers. Layers 1–3 are complete: a pro
 - A synchronized timeline with playback, pause, restart, stage skipping, and progressive reveal.
 - An evidence inspector for stages and relationships, including verified/inferred provenance, timestamps, related findings, and bottleneck status.
 - Beginner, developer, and network-engineer explanation modes over one evidence model.
-- Live HTTP URL intake with stage-aware loading, structured retry/error states, and no fixture fallback.
+- Live network URL intake with stage-aware loading, structured retry/error states, and no fixture fallback.
+- Bounded A, AAAA, CNAME, CAA, NS, MX, and sanitized TXT diagnostics with TTLs, CNAME reconstruction, address-policy results, and resolver-reported DNSSEC metadata.
+- Independent certificate evidence with deterministic SAN coverage and validity checks; a clearly labeled Certificate Transparency fallback is used when a direct peer probe is unavailable.
 - Manual redirect tracing, response status and timing, allowlisted headers, cache/security findings, and partial-result journeys.
 - Deliberate loading, empty, invalid URL, blocked destination, missing investigation, TLS failure, and mobile states.
 
-The seven seeded demonstrations remain stable recorded examples. Live workspaces are labeled **Live HTTP evidence** and contain only facts returned by the Worker or limited deterministic inferences with provenance.
+The seven seeded demonstrations remain stable recorded examples. Live workspaces are labeled **Live network evidence** and contain only facts returned by deterministic tools or limited, explicitly labeled inferences with provenance.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
     UI[React client] -->|POST /api/v1/investigations/http| W[Cloudflare Worker]
-    W --> N[URL normalization]
-    N --> S[SSRF policy + DoH preflight]
-    S --> R[Manual redirect tracer]
+    W --> N[URL normalization + SSRF policy]
+    N --> DNS[Cloudflare 1.1.1.1 DoH diagnostics]
+    DNS --> TLS[Bounded peer probe or labeled CT fallback]
+    TLS --> R[Manual redirect tracer]
     R --> H[Allowlisted headers + timing]
     H --> D[Deterministic cache/security rules]
     D --> M[Validated Investigation schema]
@@ -36,11 +39,11 @@ flowchart LR
     DEMO[Recorded examples] --> UI
 ```
 
-The React client and Worker share strict TypeScript and Zod runtime contracts. The Worker never returns graph coordinates; a library-neutral client adapter derives graph nodes, relationships, primary/secondary paths, confidence, and bottlenecks. Cloudflare Workers performs safe deterministic HTTP collection, with a native Rate Limiting binding protecting the expensive endpoint. D1, R2, Durable Objects, Queues, Browser Rendering, Workers AI, AI Gateway, and Vectorize are not wired into Layer 3.
+The React client and Worker share strict TypeScript and Zod runtime contracts. The Worker never returns graph coordinates; a library-neutral client adapter derives graph nodes, relationships, primary/secondary paths, confidence, and bottlenecks. Cloudflare Workers performs bounded deterministic orchestration, with a native Rate Limiting binding protecting the endpoint. D1, R2, Durable Objects, Queues, Browser Rendering, Workers AI, AI Gateway, and Vectorize are not wired into Layer 4.
 
 ## Request lifecycle
 
-The Layer 3 lifecycle is intake → runtime request validation → URL normalization → public-network and DNS-answer safety checks → bounded manual redirects → header/timing collection → deterministic cache/security analysis → canonical investigation validation → adaptive rendering. Completed redirect evidence is retained if a later target is blocked or fails. See [the pipeline design](./docs/investigation-pipeline.md).
+The Layer 4 lifecycle is intake → normalization → DNS records and public-address validation → independent certificate evidence for relevant HTTPS hosts → bounded manual redirects → HTTP header/timing collection → deterministic DNS/TLS/cache/security findings → canonical investigation validation → adaptive rendering. Completed evidence is retained when a later DNS, certificate, redirect, or HTTP step fails. See [the pipeline design](./docs/investigation-pipeline.md).
 
 ## Local development
 
@@ -51,7 +54,7 @@ npm install
 npm run dev
 ```
 
-`npm run dev` starts Vite on port 5173 and Wrangler on port 8787; Vite proxies `/api` to the Worker. Local development and tests require no Cloudflare credentials. Copy `.dev.vars.example` to `.dev.vars` only when overriding local variables.
+`npm run dev` starts Vite on port 5173 and Wrangler on port 8787; Vite proxies `/api` to the Worker. Local development and tests require no Cloudflare credentials. Copy `.dev.vars.example` to `.dev.vars` only when overriding local variables. Limited unauthenticated Certificate Transparency lookup is suitable for evaluation; configure the optional Cert Spotter token for production use.
 
 Useful split commands:
 
@@ -93,8 +96,11 @@ Set `VITE_API_BASE_URL` at frontend build time when the API is on another origin
 - `CORS_ALLOWED_ORIGINS` — optional comma-separated exact origin allowlist.
 - `HTTP_HOP_TIMEOUT_MS` — optional 250–15,000 ms override; default 8,000 ms.
 - `HTTP_OVERALL_TIMEOUT_MS` — optional 250–30,000 ms override; default 20,000 ms.
+- `DNS_TIMEOUT_MS` — optional 250–10,000 ms per-host DNS diagnostic bound; default 5,000 ms.
+- `CERTIFICATE_TIMEOUT_MS` — optional 250–10,000 ms per certificate mechanism; default 8,000 ms.
+- `CERTSPOTTER_API_TOKEN` — optional SSLMate Cert Spotter token. Store it with `wrangler secret put CERTSPOTTER_API_TOKEN`; never expose it to the client.
 
-No credentials, tokens, storage bindings, or AI model keys are required in Layer 3.
+No Cloudflare API token, storage binding, or AI model key is required for local Layer 4 development.
 
 ## Security considerations
 
@@ -116,8 +122,9 @@ Client URL validation is only a usability guard. The Worker independently reject
 
 ## Known limitations
 
-- Live collection currently covers HTTP response headers, statuses, redirects, and Worker-observed timings only.
-- Workers does not expose DNS lookup, TCP connection, TLS handshake, cipher, ALPN, origin-only, or browser render timings through standard fetch.
+- DNS data is recursive resolver evidence, not an authoritative-traversal trace. `AD` records the resolver's authentication signal and is not a complete DNSSEC security verdict.
+- A direct `node:tls` peer probe can be unavailable under Workers socket policy. The fallback is a Certificate Transparency issuance, not proof of the certificate used by the target HTTP fetch.
+- Workers does not expose outbound fetch TCP time, TLS handshake time, cipher, ALPN, selected peer chain, origin-only time, or browser render timing.
 - DoH preflight checks observed answers but cannot pin the target connection, so it reduces rather than eliminates DNS-rebinding risk.
 - Some targets reject or treat data-center/Worker requests differently from browser traffic.
 - AI commands, simulations, persistence, sharing, export, and authentication are not active.
@@ -127,7 +134,7 @@ Client URL validation is only a usability guard. The Worker independently reject
 
 ## Roadmap
 
-The next milestone is Layer 4: DNS records and TLS certificate investigation with graceful Cloudflare runtime degradation. It has not started. The remaining milestones are tracked in [the implementation plan](./docs/implementation-plan.md).
+The next milestone is Layer 5: browser investigation. It has not started. The remaining milestones are tracked in [the implementation plan](./docs/implementation-plan.md).
 
 ## Architecture and planning
 
@@ -141,3 +148,4 @@ The next milestone is Layer 4: DNS records and TLS certificate investigation wit
 - [Journey visualization](./docs/journey-visualization.md)
 - [HTTP diagnostics](./docs/http-diagnostics.md)
 - [Cloudflare runtime](./docs/cloudflare-runtime.md)
+- [DNS and TLS diagnostics](./docs/dns-tls-diagnostics.md)

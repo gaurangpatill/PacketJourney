@@ -3,22 +3,27 @@
 Packet Journey separates collection, interpretation, and presentation.
 
 1. The React client submits a URL to the versioned Cloudflare Worker API.
-2. The Worker validates the request, normalizes the URL, and enforces its public-network policy before any target fetch.
-3. A bounded state machine manually fetches and revalidates each redirect destination, records allowlisted response headers, times Worker subrequests, and cancels every unused body.
-4. Pure deterministic modules parse cache directives, check browser-facing security headers, and derive cautious infrastructure clues.
-5. The Worker adapter creates and runtime-validates the canonical investigation model, including terminal error stages for partial results.
-6. The React client renders the same model as a graph, timeline, evidence inspector, and findings. Recorded examples enter at this same boundary but remain visibly labeled.
+2. The Worker validates the request, normalizes the URL, collects bounded recursive DNS evidence, and applies one shared public-address policy before any target fetch or certificate probe.
+3. A typed orchestrator reconstructs CNAMEs, records resolver DNSSEC metadata, selects at most three meaningful hostnames, and inspects HTTPS certificate evidence through a restricted peer probe with a Certificate Transparency fallback.
+4. The existing bounded state machine manually fetches and revalidates each redirect destination, records allowlisted response headers, times Worker subrequests, and cancels every unused body.
+5. Pure deterministic modules create evidence-linked DNS, TLS, cache, security-header, redirect, and infrastructure findings.
+6. The Worker adapter creates and runtime-validates the canonical investigation model, including terminal error stages for partial results.
+7. The React client renders the same model as a graph, timeline, evidence inspector, and findings. Recorded examples enter at this same boundary but remain visibly labeled.
 
-## Layer 3 runtime boundary
+## Layer 4 runtime boundary
 
 ```mermaid
 flowchart LR
     C[React client] -->|validated JSON| API[Cloudflare Worker router]
     API --> URL[Canonical URL normalizer]
-    URL --> SSRF[IP policy + Cloudflare DoH preflight]
-    SSRF --> TRACE[Manual redirect tracer]
+    URL --> DNS[Typed Cloudflare DoH client]
+    DNS --> SSRF[Shared IP and SSRF policy]
+    SSRF --> CERT[Restricted peer certificate probe]
+    CERT -->|unavailable| CT[Fixed Cert Spotter CT API]
+    CERT --> TRACE[Manual redirect tracer]
+    CT --> TRACE
     TRACE --> HEADERS[Allowlisted headers + hop timing]
-    HEADERS --> RULES[Cache, security, infrastructure rules]
+    HEADERS --> RULES[DNS, TLS, cache, security, infrastructure rules]
     RULES --> ADAPTER[Investigation adapter + Zod validation]
     ADAPTER --> C
     TRACE -->|partial error| ADAPTER
@@ -34,6 +39,6 @@ The SVG canvas owns only viewport interaction. A shared journey controller synch
 
 This separation keeps future Worker responses independent of rendering technology and lets graph generation and layout be tested without a browser. See [journey-visualization.md](./journey-visualization.md).
 
-Cloudflare services are introduced only with a concrete responsibility. Layer 3 uses Workers for the API runtime, observability logs, outbound HTTP fetches, bounded orchestration, and a native Rate Limiting binding at the investigation endpoint; it also calls Cloudflare's public 1.1.1.1 DoH endpoint for a defensive hostname preflight. Browser Rendering, Queues, Durable Objects, D1, R2, AI Gateway, Workers AI, and Vectorize are future decisions and have no current binding.
+Cloudflare services are introduced only with a concrete responsibility. Layer 4 uses Workers for the API runtime, observability logs, deterministic orchestration, outbound HTTP/DoH calls, a restricted `node:tls` client attempt, and a native Rate Limiting binding. Cloudflare's public 1.1.1.1 DoH endpoint supplies both safety and displayed resolver evidence. SSLMate Cert Spotter is a narrowly scoped external fallback when Workers cannot expose a peer certificate; only the prevalidated hostname is sent, and its output is labeled CT issuance evidence. Browser Rendering, Queues, Durable Objects, D1, R2, AI Gateway, Workers AI, and Vectorize remain unimplemented.
 
-See [http-diagnostics.md](./http-diagnostics.md), [cloudflare-runtime.md](./cloudflare-runtime.md), and [implementation-plan.md](./implementation-plan.md).
+See [http-diagnostics.md](./http-diagnostics.md), [dns-tls-diagnostics.md](./dns-tls-diagnostics.md), [cloudflare-runtime.md](./cloudflare-runtime.md), and [implementation-plan.md](./implementation-plan.md).

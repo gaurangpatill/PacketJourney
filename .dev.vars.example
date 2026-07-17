@@ -1,2 +1,4 @@
 ENVIRONMENT=development
 CORS_ALLOWED_ORIGINS=http://localhost:5173
+# Optional for production-volume Certificate Transparency lookup:
+# CERTSPOTTER_API_TOKEN=

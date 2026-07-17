@@ -9,7 +9,7 @@ The canonical investigation model distinguishes observations from conclusions.
 
 Runtime schemas are authoritative. TypeScript types are inferred from those schemas so persisted data, Worker responses, fixtures, and UI state cannot drift silently.
 
-Layer 3 adds the `live-http` scenario discriminator. `mock: false` identifies live Worker results; the existing seven scenario discriminators remain recorded examples with `mock: true`. Scenario is descriptive metadata and never drives graph layout.
+The `live-http` scenario discriminator remains the backward-compatible name for the versioned live endpoint, now containing Layer 4 DNS and certificate stages as well as HTTP. `mock: false` identifies live Worker results; the existing seven scenario discriminators remain recorded examples with `mock: true`. Scenario is descriptive metadata and never drives graph layout.
 
 The versioned API validates both envelopes:
 
@@ -24,7 +24,11 @@ type InvestigationErrorResponse = {
 };
 ```
 
-HTTP diagnostic types are internal Worker contracts. The adapter maps them into evidence and stages; redirect indices, raw allowlisted headers, cache classifications, security checks, and error states do not leak visualization positions into the domain model.
+DNS query/record/alias/address results, certificate observations, and HTTP diagnostic types are internal Worker contracts. The adapter maps them into evidence and stages; resolver responses, redirect indices, allowlisted headers, cache classifications, security checks, and error states do not leak visualization positions into the domain model.
+
+DNS records are verified resolver observations. CNAME-chain reconstruction, address-range classification, and human-readable summaries are deterministic inferences. DNSSEC evidence stores the resolver's `AD`/status/comment source; a finding may say the resolver reported authentication or failure, but never promotes that into a complete domain-security verdict.
+
+Certificate evidence includes `observationKind`. `served-peer` means the independent TLS probe exposed a peer certificate. `certificate-transparency` means a fixed CT search returned issuance metadata and does not identify the certificate used by Worker `fetch`. Unsupported fetch-session TLS fields are represented as the literal value `unavailable`, not omitted or inferred from HTTP protocol behavior.
 
 Stage IDs and evidence IDs must be unique. Connections must reference an existing stage and cannot point back to the same stage. These runtime invariants make graph adaptation deterministic and prevent ambiguous selections.
 
@@ -36,4 +40,4 @@ The `branch` field remains a semantic grouping hint for parallel work, not a coo
 
 Simulated evidence will use a separate simulation marker and will never overwrite collected evidence. AI-generated explanations remain conclusions even when they cite verified evidence.
 
-For live HTTP results, raw status/header/location observations are `verified`. Parsed cache dispositions and vendor/intermediary rules are `inferred` unless a target-specific header directly verifies the fact. Findings remain conclusions even when their confidence is 1.0; every finding references existing evidence IDs and the schema rejects dangling references.
+For live results, raw resolver records, peer/CT fields, and HTTP status/header/location observations are `verified` relative to their named source. Parsed cache dispositions, hostname coverage, alias chains, address classifications, and vendor/intermediary rules are `inferred`. Findings remain conclusions even when confidence is 1.0; every finding references existing evidence IDs and the schema rejects dangling references.

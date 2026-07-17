@@ -65,7 +65,7 @@ In Layer 1, the orchestrator boundary is represented by seeded mock investigatio
 - [x] Layer 1 — Product foundation
 - [x] Layer 2 — Adaptive journey visualization
 - [x] Layer 3 — Deterministic HTTP investigation and SSRF-safe fetch
-- [ ] Layer 4 — DNS and TLS investigation (in progress: audit and runtime validation complete)
+- [x] Layer 4 — DNS and TLS investigation
 - [ ] Layer 5 — Browser investigation
 - [ ] Layer 6 — Deterministic findings engine
 - [ ] Layer 7 — Evidence-grounded AI investigation
@@ -157,7 +157,7 @@ Runtime decisions and limits to validate:
 ## Risks and runtime limitations
 
 - Browser Rendering, Workers AI, R2, D1, Queues, Durable Objects, and Vectorize require Cloudflare bindings and account credentials. Local deterministic fixtures must remain first-class.
-- Workers do not expose arbitrary raw sockets. Low-level TLS details such as cipher suite and full handshake timing may require an external constrained diagnostic service or must be marked unavailable.
+- Workers expose constrained outbound sockets, but Cloudflare directs HTTP ports such as 443 through `fetch` and applies destination restrictions. The independent port-443 peer probe therefore degrades to documented Certificate Transparency issuance evidence when direct peer inspection is unavailable; outbound-fetch TLS session details remain unavailable.
 - Recursive DNS APIs may omit authoritative traversal details or per-record TTL behavior. Every field must retain its source and collection time.
 - Browser resource timing can be incomplete because of cross-origin timing restrictions, cached resources, service workers, and browser API limits.
 - Arbitrary URL investigation is an SSRF boundary. Validation must cover every redirect and post-resolution IP, not only the submitted hostname.
@@ -270,4 +270,41 @@ Known limitations:
 - A cancelled response body means transferred body bytes are unavailable unless the target supplies `Content-Length`; no document contents are retained.
 - The native rate-limit binding is a coarse per-location/client-network abuse guard. Exact per-user or organization quotas require the later identity model.
 - Targets may block or vary responses to Worker/data-center traffic. Live tests are opt-in; the main suite stays deterministic.
-- Layer 4 DNS/TLS collection, Layer 5 browser execution, persistence, streaming, AI, and counterfactuals have not started.
+- At the Layer 3 handoff, DNS/TLS collection, browser execution, persistence, streaming, AI, and counterfactuals were not implemented.
+
+### Layer 4 — DNS and TLS investigation (complete, 2026-07-16)
+
+Implemented:
+
+- Typed, bounded Cloudflare 1.1.1.1 DNS-over-HTTPS collection for A, AAAA, CNAME, CAA, NS, MX, and sanitized TXT records with TTLs, timestamps, response metadata, source labels, and conservative DNSSEC interpretation.
+- Stable CNAME-chain reconstruction with depth and record limits, loop/missing-terminal detection, deduplication, partial evidence, and no provider-ownership inference.
+- One shared IPv4/IPv6 address policy for displayed DNS answers and SSRF enforcement, including mapped IPv4, mixed prohibited answers, metadata destinations, and public IP literals.
+- Timeout-bounded, prevalidated, SNI-scoped port-443 certificate inspection with deterministic SAN matching, IDN normalization, single-label wildcard semantics, validity checks, chain/SAN bounds, and structured errors.
+- A narrowly scoped SSLMate Cert Spotter fallback that sends only the prevalidated hostname and labels returned data as Certificate Transparency issuance evidence, never as the certificate served by the Worker HTTP fetch.
+- Ordered initial/redirect/final-host DNS and TLS orchestration with hostname deduplication, at most three certificate targets, partial-result preservation, and the existing HTTP endpoint and canonical schema contract.
+- Evidence-linked DNS and TLS findings that reserve high severity for directly served-peer expiry, not-yet-valid, or hostname mismatch evidence; inconclusive probes and CT results remain warnings or informational.
+- DNS/TLS graph stages, timeline integration, structured inspector evidence, duration metrics, live/recorded labels, and Beginner/Developer/Network Engineer presentation depth without changing underlying evidence.
+- Layer 4 architecture, runtime, security, pipeline, data-model, diagnostics, environment, privacy, and deployment documentation.
+
+Validation:
+
+- `npm run format` — passed.
+- `npm run typecheck` — passed with strict and unchecked-index rules.
+- `npm run lint` — passed with zero warnings.
+- `npm run test` — 173 tests passed across 24 files, including all Layer 1–3 regressions.
+- `npm run build:web` — passed; 371.36 kB JavaScript / 109.61 kB gzip and 42.45 kB CSS / 8.98 kB gzip.
+- `npm run build:worker` — passed; 271.70 KiB upload / 52.16 KiB gzip.
+- `npm audit` — zero production or development vulnerabilities.
+- Local Worker smoke — public HTTPS, HTTP→HTTPS, apex→`www`, cross-host CNAME, blocked private address, invalid protocol, and partial timeout behavior checked.
+- Combined development smoke — Vite routes and the proxied live endpoint returned a canonical DNS/TLS/HTTP investigation; DoH and CT source labels, unavailable fetch-session TLS fields, and no browser claim were verified.
+- Manual headless Chrome review — desktop and 500 px narrow workspaces checked for live/recorded labels, graph readability, evidence selection, toolbar containment, and responsive copy.
+- Fixture coverage includes DNS record parsing/limits/errors, CNAME chains, DNSSEC states, address policy integration, certificate validity/SAN/wildcard/IDN behavior, CT fallback, findings, orchestration boundaries, adapter deduplication, API errors, CORS, rate limiting, and SSRF regressions.
+
+Known limitations:
+
+- Cloudflare's JSON DoH response is recursive-resolver evidence, not authoritative traversal. `AD` reports the resolver's authenticated-data result and does not prove the domain's complete DNSSEC posture.
+- Workers `fetch` does not expose outbound TLS protocol, cipher, ALPN, peer chain, TCP duration, or handshake duration. Incoming `request.cf` connection metadata is unrelated and is not used.
+- Cloudflare's socket policy can prevent a direct port-443 peer probe. Cert Spotter then supplies bounded public CT issuance data; this cannot prove which certificate a site currently serves and may be rate-limited without an optional secret token.
+- DoH validation still cannot pin the later Worker fetch to an observed address, so the documented DNS-rebinding time-of-check/time-of-use gap remains.
+- DNS and certificate probes are bounded and deduplicated rather than exhaustive across arbitrarily long redirect chains.
+- Browser Rendering, AI, D1, Durable Objects, Queues, R2, Vectorize, authentication, persistence, collaboration, and counterfactual debugging remain unimplemented. Layer 5 has not started.
