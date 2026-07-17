@@ -70,3 +70,7 @@ Layer 5 does not add Cloudflare Queues. The measured bounded local flow complete
 `npm run dev` starts Vite and Wrangler together. Wrangler supplies local Browser Run and R2 simulation without production credentials. Set `BROWSER_ENABLED=false` to exercise the explicit unavailable path. Tests use fixture browser objects, resolver responses, and R2 bindings; the primary suite does not depend on public pages or the live Browser Run service.
 
 See [browser-artifacts.md](./browser-artifacts.md) for storage and access boundaries, [security.md](./security.md) for the full threat model, and [cloudflare-runtime.md](./cloudflare-runtime.md) for plan and runtime constraints.
+
+## Layer 6 interpretation boundary
+
+Browser collection remains deterministic and unchanged. The AI selector may include bounded performance summaries, resource groups, failures, console entries, and browser limitations, while excluding screenshot bytes, raw page content, cookies, and complete manifests. Read-only AI tools can regroup already collected browser evidence but cannot launch Browser Run, navigate, or access R2. A model interpretation never becomes browser evidence or replaces a deterministic browser finding.

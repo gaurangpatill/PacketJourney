@@ -33,4 +33,20 @@ Only target response headers on an explicit allowlist are retained. Worker body 
 
 The orchestrator investigates at most three unique hostname/protocol boundaries and at most three certificates, prioritizing the initial URL, final URL, and meaningful domain transitions. Per-request query caching deduplicates safety and displayed DNS work without adding persistence.
 
-The seven seeded investigations remain recorded examples at the presentation boundary. Live failure never falls back to them. Layer 5 browser evidence uses the same canonical graph boundary; Layer 6 has not started.
+The seven seeded investigations remain recorded examples at the presentation boundary. Live failure never falls back to them. Layer 5 browser evidence uses the same canonical graph boundary.
+
+Layer 6 is a separate interpretation pipeline and never alters collection:
+
+```text
+POST /api/v1/investigations/:id/diagnose
+  → canonical payload and matching ID validation
+  → question/capability validation and deterministic intent
+  → bounded, sanitized, explicitly untrusted evidence selection
+  → optional one-round Workers AI tool plan through AI Gateway
+  → fixed read-only application tools over the submitted investigation
+  → structured Workers AI diagnosis through AI Gateway
+  → Zod, ID cross-reference, category relevance, confidence, and causation validation
+  → evidence links, uncertainty, actions, and presentation-only graph emphasis
+```
+
+Missing relevant evidence produces an inconclusive evidence-guard response without model inference. AI failure leaves the canonical investigation, deterministic findings, graph, and artifacts intact.

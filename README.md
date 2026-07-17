@@ -2,7 +2,7 @@
 
 Packet Journey is an AI-assisted network investigation environment that reconstructs, visualizes, and diagnoses the path from a URL to a rendered webpage.
 
-The project is being built in validated layers. Layers 1–5 are complete: a production-shaped frontend, an interactive journey graph, and a deterministic Cloudflare Worker investigation pipeline for DNS, certificate, redirects, HTTP, browser resources, rendering milestones, screenshots, cache, and security evidence. AI remains explicitly unimplemented.
+Layers 1–6 are complete: the production-shaped graph and deterministic Cloudflare investigation pipeline now support a constrained, evidence-grounded Workers AI investigator routed through AI Gateway. The model explains collected facts; it does not collect or replace them.
 
 ![Packet Journey browser-enabled journey](./docs/assets/browser-journey.png)
 
@@ -27,8 +27,16 @@ The project is being built in validated layers. Layers 1–5 are complete: a pro
 - Private R2 screenshot storage with opaque IDs, 24-hour access expiry, a read-only Worker route, secure image headers, and deliberate loading/failure states.
 - A searchable, sortable resource waterfall and evidence-driven browser/resource branches in the existing graph and timeline.
 - Deliberate loading, empty, invalid URL, blocked destination, missing investigation, TLS failure, and mobile states.
+- A compact one-question AI investigator with deterministic suggestions, strict structured output, cited evidence navigation, explicit uncertainty, prioritized actions, graph emphasis, cancellation, and clear fixture/model labels.
+- Beginner, Developer, and Network Engineer AI depth over the same evidence, with deterministic findings preserved as the authoritative rule output.
 
 The seven seeded demonstrations remain stable recorded examples. Live workspaces are labeled **Live network evidence** and contain only facts returned by deterministic tools or limited, explicitly labeled inferences with provenance.
+
+Example bounded diagnosis:
+
+> **Likely:** The recorded origin stage is the largest measured duration in this journey. That supports prioritizing origin-path investigation, but it does not reveal whether application code, a database, or another internal dependency caused the delay. Evidence: `origin-e1`.
+
+The same reference selects the graph stage and inspector evidence. The deterministic finding remains unchanged beside the AI interpretation.
 
 ## Architecture
 
@@ -47,14 +55,19 @@ flowchart LR
     R2 --> M[Validated Investigation schema]
     D --> M
     M --> UI
+    M --> S[Bounded evidence selector]
+    S --> AI[Workers AI via AI Gateway]
+    AI <--> T[Restricted read-only tools]
+    AI --> V[Validated evidence-linked diagnosis]
+    V --> UI
     DEMO[Recorded examples] --> UI
 ```
 
-The React client and Worker share strict TypeScript and Zod runtime contracts. The Worker never returns graph coordinates; a library-neutral client adapter derives graph nodes, relationships, primary/secondary paths, confidence, and bottlenecks. Cloudflare Workers performs bounded deterministic orchestration, Browser Run collects isolated page evidence, R2 stores screenshot bytes, and two native Rate Limiting bindings protect general and browser work. Queues were intentionally omitted because the bounded synchronous path is currently reliable; D1, Durable Objects, Workers AI, AI Gateway, and Vectorize are not wired in.
+The React client and Worker share strict TypeScript and Zod runtime contracts. Workers performs bounded diagnostics and AI orchestration, Browser Run collects isolated page evidence, R2 stores screenshot bytes, Workers AI interprets selected evidence, AI Gateway provides model observability/routing, and native Rate Limiting bindings protect network, browser, client-AI, and repeated-payload work. The model has no arbitrary fetch or code tool.
 
 ## Request lifecycle
 
-The Layer 5 lifecycle is intake → normalization → DNS records and public-address validation → independent certificate evidence → bounded manual redirects → HTTP header/timing collection → isolated browser navigation with per-request safety checks → resource/performance/console collection → private R2 screenshot → deterministic findings → canonical validation → adaptive rendering. Completed network evidence is retained when Browser Run or R2 fails. See [the pipeline design](./docs/investigation-pipeline.md).
+The deterministic lifecycle remains intake → normalization → DNS/public-address policy → certificate evidence → manual redirects → HTTP evidence → isolated Browser Run → private R2 screenshot → deterministic findings → canonical validation. A separate diagnosis request performs question validation → evidence selection → optional restricted tool planning → Workers AI through AI Gateway → full output/reference validation → assistant panel and graph emphasis. AI failure never removes deterministic functionality.
 
 ## Local development
 
@@ -65,13 +78,14 @@ npm install
 npm run dev
 ```
 
-`npm run dev` starts Vite on port 5173 and Wrangler on port 8787; Vite proxies `/api` to the Worker. Wrangler provides local Browser Run and R2 simulation, so local development and tests require no Cloudflare credentials. Copy `.dev.vars.example` to `.dev.vars` only when overriding local variables. Set `BROWSER_ENABLED=false` to verify the explicit HTTP-only degradation path. Limited unauthenticated Certificate Transparency lookup is suitable for evaluation; configure the optional Cert Spotter token for production use.
+`npm run dev` starts Vite on port 5173 and a credential-free local Worker on port 8787 using `wrangler.local.jsonc`; Vite proxies `/api` to it. The local config deliberately omits the always-remote `AI` binding and enables visibly labeled deterministic fixture output. Use `npm run dev:worker:ai` with fixture mode disabled for the production-shaped AI binding when Wrangler authentication/runtime access is available. No model API key is used.
 
 Useful split commands:
 
 ```bash
 npm run dev:web
 npm run dev:worker
+npm run dev:worker:ai
 npm run build:web
 npm run build:worker
 ```
@@ -113,8 +127,13 @@ Before the first preview/production Worker deployment, create the private R2 buc
 - `CERTIFICATE_TIMEOUT_MS` — optional 250–10,000 ms per certificate mechanism; default 8,000 ms.
 - `CERTSPOTTER_API_TOKEN` — optional SSLMate Cert Spotter token. Store it with `wrangler secret put CERTSPOTTER_API_TOKEN`; never expose it to the client.
 - `BROWSER_ENABLED` — `true` or `false`; disables Browser Run cleanly while preserving the Layer 4 HTTP journey.
+- `AI_ENABLED` — disables only the AI endpoint when `false`.
+- `AI_FIXTURE_MODE` — deterministic local/test answers only; ignored outside development/test.
+- `AI_GATEWAY_ID` — AI Gateway identifier, default `default`.
+- `AI_MODEL` — configured model-registry key, default `llama-3.3-70b-fast`.
+- `AI_FALLBACK_MODEL`, `AI_MAX_REQUESTS`, `AI_MAX_TOOL_ROUNDS`, `AI_MAX_INPUT_CHARS`, `AI_MAX_OUTPUT_CHARS`, `AI_MAX_OUTPUT_TOKENS`, `AI_TIMEOUT_MS` — optional bounded AI controls.
 
-`BROWSER`, `BROWSER_ARTIFACTS`, `INVESTIGATION_RATE_LIMITER`, and `BROWSER_RATE_LIMITER` are typed Wrangler bindings, not secrets. No Cloudflare API token or AI model key is required by application code.
+`BROWSER`, `BROWSER_ARTIFACTS`, `AI`, and the four Rate Limiting bindings are typed Wrangler bindings, not secrets. No Cloudflare API token or model-provider key is read by application code.
 
 ## Security considerations
 
@@ -136,6 +155,8 @@ Client URL validation is only a usability guard. The Worker independently reject
 - Run Browser Run only for a verified final document and protect it with a stricter three-request/minute abuse guard.
 - Keep screenshot bytes out of canonical JSON and behind an opaque, expiring, Worker-mediated R2 read route.
 - Defer Queues until measured production latency demonstrates that the bounded synchronous browser contract is unsuitable.
+- Keep model IDs in one registry, cap context well below the documented window, skip Gateway caching, and runtime-validate every model claim/reference before rendering.
+- Return an evidence-guarded inconclusive answer without inference when the selected investigation has no relevant evidence.
 
 ## Known limitations
 
@@ -147,14 +168,16 @@ Client URL validation is only a usability guard. The Worker independently reject
 - Browser timings are one lab observation, not field performance; cross-origin timing policy and caching can make transfer bytes unavailable.
 - Browser request interception rechecks DNS but cannot pin Chromium's later connection to the checked answer, leaving a documented rebinding gap.
 - Screenshot links are opaque and short-lived but unauthenticated until the later identity layer; treat them as bearer links.
-- AI commands, simulations, persistence, sharing, export, authentication, and organization controls are not active.
-- No D1, Durable Objects, Queues, Workers AI, AI Gateway, or Vectorize integration exists yet.
+- AI output can still be semantically imperfect despite structural/reference validation; the UI exposes confidence and uncertainty rather than presenting it as fact.
+- Layer 6 validates submitted canonical payload shape, not server provenance; persistence/signatures do not exist.
+- Vectorize/AI Search retrieval, simulations, persistence, sharing, export, authentication, and organization controls are not active.
+- No D1, Durable Objects, Queues, Vectorize, persistence, collaboration, or counterfactual debugging exists yet.
 - Layout is optimized for directed acyclic request journeys. Defensive cyclic input rendering exists, but cycle-specific routing is not a Layer 2 feature.
 - Very large graphs are fit as an overview and may require user zoom; semantic clustering is deferred until real browser traces establish its rules.
 
 ## Roadmap
 
-The next milestone is Layer 6: a broader deterministic findings engine. It has not started. The remaining milestones are tracked in [the implementation plan](./docs/implementation-plan.md).
+Layer 6 is complete. Layer 7 has not started; retrieval or another capability must be justified by evaluation evidence before adding services. The remaining milestones are tracked in [the implementation plan](./docs/implementation-plan.md).
 
 ## Architecture and planning
 
@@ -163,6 +186,9 @@ The next milestone is Layer 6: a broader deterministic findings engine. It has n
 - [Investigation pipeline](./docs/investigation-pipeline.md)
 - [Security model](./docs/security.md)
 - [AI design](./docs/ai-design.md)
+- [AI investigation](./docs/ai-investigation.md)
+- [AI trust boundary](./docs/ai-trust-boundary.md)
+- [AI evaluation](./docs/ai-evaluation.md)
 - [Data model](./docs/data-model.md)
 - [Counterfactual engine](./docs/counterfactual-engine.md)
 - [Journey visualization](./docs/journey-visualization.md)

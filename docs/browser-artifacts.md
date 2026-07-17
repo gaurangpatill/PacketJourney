@@ -39,3 +39,7 @@ Missing R2, an oversized screenshot, capture failure, write failure, expiry, and
 ## Testing
 
 Fixture tests cover successful writes, safe UUID-derived keys, size limits, missing bindings, failed writes, metadata-only API output, safe retrieval headers, invalid IDs, missing objects, expiry, and absence of unrestricted artifact operations. No fixture contains a private screenshot.
+
+## AI boundary
+
+Layer 6 does not send screenshot bytes, artifact object keys, or image contents to Workers AI or AI Gateway. The selector may include bounded artifact-independent browser metadata already present as evidence. The AI tool registry has no R2 binding and cannot retrieve screenshot routes. Evidence navigation may open the existing screenshot panel only through validated presentation instructions.

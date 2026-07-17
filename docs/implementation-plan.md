@@ -66,9 +66,9 @@ In Layer 1, the orchestrator boundary is represented by seeded mock investigatio
 - [x] Layer 2 — Adaptive journey visualization
 - [x] Layer 3 — Deterministic HTTP investigation and SSRF-safe fetch
 - [x] Layer 4 — DNS and TLS investigation
-- [ ] Layer 5 — Browser investigation (in progress: audit and runtime decisions complete)
-- [ ] Layer 6 — Deterministic findings engine
-- [ ] Layer 7 — Evidence-grounded AI investigation
+- [x] Layer 5 — Browser investigation
+- [x] Layer 6 — Evidence-grounded AI investigation
+- [ ] Layer 7 — Retrieval and next investigation capability (not started)
 - [ ] Layer 8 — Counterfactual debugging
 - [ ] Layer 9 — Persistence and collaboration
 - [ ] Layer 10 — Production polish and deployment
@@ -85,7 +85,7 @@ In Layer 1, the orchestrator boundary is represented by seeded mock investigatio
 | Backend            | Cloudflare Worker with small typed tools   | Validate local Worker runtime and outbound API constraints in Layer 3.        |
 | Live state         | Durable Object per active investigation    | Validate pricing and hibernation behavior in Layer 9.                         |
 | Browser jobs       | Bounded synchronous Browser Run session    | Add Queues only after measured latency or retry behavior requires async work. |
-| AI                 | Workers AI through AI Gateway, strict JSON | Validate chosen model's structured-output reliability in Layer 7.             |
+| AI                 | Workers AI through AI Gateway, strict JSON | Runtime validation and evidence abstention implemented in Layer 6.            |
 
 ## Layer 3 implementation plan
 
@@ -188,9 +188,43 @@ Validated runtime decisions:
 - R2 is justified immediately for screenshot bytes, while resource and console summaries remain bounded JSON evidence. Local Wrangler uses simulated R2; production and preview use named private buckets. Bucket lifecycle configuration should delete artifacts after 24 hours, while the Worker retrieval route independently enforces the recorded expiry.
 - Browser Run local support is not presented as a fixture fallback. Dependency-injected browser fixtures exercise local tests; a missing/remote binding produces an explicit unavailable browser stage. A live preview smoke test requires Cloudflare account access and will be reported separately if credentials are unavailable.
 
+## Layer 6 implementation plan
+
+Objective: add a constrained Workers AI investigator over the canonical Layer 1–5 evidence. It may prioritize, connect, and explain existing facts through a read-only tool registry, but it cannot collect new network data, change deterministic findings, mutate the graph, or turn missing evidence into a diagnosis. An explicit inconclusive answer is a valid successful outcome. Vectorize/AI Search, persistence, identity, collaboration, Queues, and counterfactuals remain out of scope.
+
+Likely files:
+
+- `src/features/investigation/aiSchema.ts` for request, response, diagnosis, usage, graph-instruction, and structured error contracts shared by Worker and client.
+- `src/worker/ai/` for typed configuration, question validation, deterministic intent classification, bounded evidence selection/serialization, versioned prompts, restricted read-only tools, Workers AI/Gateway client, bounded tool execution, diagnosis orchestration, and post-model validation.
+- `src/worker/router.ts`, `env.ts`, `errors.ts`, and `wrangler.jsonc` for the separate diagnosis endpoint, AI binding, two AI-specific abuse limits, feature/fixture gates, CORS, and safe error mapping.
+- `src/features/investigation/` and `src/features/journey/` for the compact investigation assistant, deterministic suggestions, evidence navigation, and presentation-only graph emphasis.
+- Deterministic model/tool fixtures and structural evaluation cases based on the recorded investigations.
+- README, architecture, security, pipeline, runtime, browser, data-model, AI trust, AI investigation, and evaluation documentation.
+
+Acceptance criteria:
+
+- The diagnosis endpoint runtime-validates the supplied canonical investigation and matching path ID. Because Layer 6 has no persistence or signature, documentation and UI state that submitted evidence is untrusted client input, not server provenance.
+- Question length, repetition, capability-abuse, topic, request-body, selected-context, evidence-count, per-category, resource, failure, console, string, serialized-character, output, tool-call, round, model-call, timeout, and rate limits are deterministic and tested before expensive work.
+- Page-derived titles, paths, DNS TXT, headers, certificate strings, console messages, resource URLs, and errors enter only a delimited untrusted-evidence payload. They never become system instructions or expand model capabilities.
+- The tool registry has fixed names and Zod schemas, reads only the one validated investigation, performs no network/storage/environment operation, returns bounded deterministic output, and rejects unknown, malformed, duplicate-pathological, or out-of-investigation calls.
+- Workers AI requests use the typed `AI` binding and current Gateway option on `env.AI.run()`, skip cross-investigation cache, collect bounded observability metadata, and centralize model/gateway/prompt configuration. No external provider or secret is added.
+- Model JSON is treated as untrusted. The Worker validates shape, text lengths, conclusion/confidence rules, every evidence/finding/stage reference, category relevance, graph instructions, and cautious causation before returning a complete diagnosis. No partial arbitrary output reaches React.
+- Missing relevant evidence returns a polished `inconclusive` or `unsupported` diagnosis without claiming causation. Deterministic findings remain visible and unchanged on every AI success/failure path.
+- The interface stays graph-first, supports one question, suggestions, loading/cancel/retry/unavailable states, evidence-linked structured conclusions/actions/uncertainty, keyboard operation, expertise modes, and presentation-only graph emphasis on desktop and narrow layouts.
+- Formatting, strict TypeScript, zero-warning ESLint, all Layer 1–5 tests, AI unit/integration/component tests, structural evaluation fixtures, production builds, dependency audit, local Worker/combined fixture smokes, and repository hygiene pass. Real inference/Gateway validation is reported only when valid Cloudflare login is available.
+
+Validated runtime decisions:
+
+- Use `@cf/meta/llama-3.3-70b-instruct-fp8-fast` through the Workers AI binding. Cloudflare currently documents a 24,000-token context window, function calling, and JSON Mode support. The application budgets substantially below that context and centralizes the model ID for safe replacement.
+- Route inference with `env.AI.run(model, input, { gateway: { id, skipCache: true } })`. Gateway caching stays disabled because evidence-bearing questions are investigation-specific; no custom cache key is needed in Layer 6.
+- Use at most one traditional function-calling planning round and one structured diagnosis call. The application—not the model—executes fixed read-only tools. This preserves auditability and avoids embedded tools that could acquire external API authority.
+- JSON Mode is only a generation hint. Cloudflare does not guarantee schema compliance, so strict runtime and cross-reference validation remains the product boundary.
+- A compact summary plus selected detail is capped at 18,000 serialized characters, leaving ample model context for policy, tools, and output. Omitted evidence is counted and explained rather than cut mid-JSON.
+- Development fixture output is dependency-injected or explicitly gated to non-production environments and visibly labeled. Missing AI remains an ordinary unavailable assistant state; deterministic investigation functionality is unchanged.
+
 ## Risks and runtime limitations
 
-- Browser Run and R2 require Cloudflare account features for preview/production, while Wrangler provides local bindings. Workers AI, D1, Queues, Durable Objects, and Vectorize remain later-layer services. Deterministic fixtures stay first-class.
+- Browser Run, R2, and Workers AI require Cloudflare account features for preview/production, while Wrangler provides local bindings and explicit deterministic AI fixture mode. D1, Queues, Durable Objects, and Vectorize remain later-layer services.
 - Workers expose constrained outbound sockets, but Cloudflare directs HTTP ports such as 443 through `fetch` and applies destination restrictions. The independent port-443 peer probe therefore degrades to documented Certificate Transparency issuance evidence when direct peer inspection is unavailable; outbound-fetch TLS session details remain unavailable.
 - Recursive DNS APIs may omit authoritative traversal details or per-record TTL behavior. Every field must retain its source and collection time.
 - Browser resource timing can be incomplete because of cross-origin timing restrictions, cached resources, service workers, and browser API limits.
@@ -380,3 +414,36 @@ Known limitations:
 - Screenshot access uses opaque 24-hour bearer references because authentication/ownership do not exist yet. Production R2 buckets still require a one-day lifecycle deletion rule for physical cleanup.
 - Synchronous orchestration is bounded but should be reevaluated using production traces before adding Queues. No retry/job/polling contract exists.
 - Workers AI, AI Gateway, Vectorize, D1, Durable Objects, Queues, authentication, persistence, collaboration, organization support, and counterfactual debugging remain unimplemented. Layer 6 has not started.
+
+### Layer 6 — Evidence-grounded AI investigation (complete, 2026-07-17)
+
+Implemented:
+
+- A separate versioned diagnosis endpoint over a runtime-validated, path-matched canonical investigation payload, with explicit documentation that Layer 6 validates shape rather than server provenance.
+- Central Workers AI model registry/configuration, Llama 3.3 70B fast default, current AI binding integration, AI Gateway routing/observability metadata, skipped cross-investigation caching, bounded timeouts/output, and no external provider or secret.
+- Deterministic question validation/intent, stable sanitized evidence selection, 18,000-character/30-item context budget, per-category/resource/console limits, omission summaries, and untrusted-data delimiters.
+- One optional traditional function-calling planning round against a fixed application-owned read-only registry, with argument/scope/duplicate/count/output validation and no network, code, binding, R2, Browser Run, or mutation capability.
+- Strict diagnosis/request/response/usage schemas and post-model checks for evidence/stage/finding IDs, evidence-stage ownership, category relevance, confidence, graph instructions, causal language, and complete cited claims.
+- A deterministic no-evidence guard that returns a polished inconclusive answer without model inference, plus explicit local/test fixture mode and structured disabled/binding/timeout/Gateway/rate/output/tool failures.
+- Compact workspace assistant with deterministic questions, cancel/retry, evidence-linked conclusion/actions, uncertainty/follow-ups, model/fixture source, graph emphasis/dimming, and inspector navigation while preserving deterministic findings.
+- Separate client and repeated-payload AI rate limits; structured safe logs exclude questions, prompts, evidence payloads, and complete model responses.
+- Evaluation coverage across all seeded journeys plus injection-bearing evidence, malformed/invalid outputs, tool abuse, absent evidence, UI states, model-client/Gateway options, and API behavior.
+
+Validation:
+
+- `npm run format`, strict `npm run typecheck`, and zero-warning `npm run lint` — passed.
+- `npm run test` — 244 tests passed across 39 files, including all Layer 1–5 regressions.
+- `npm run build:web` — passed; 387.02 kB JavaScript / 113.75 kB gzip and 50.09 kB CSS / 10.41 kB gzip.
+- `npm run build:worker` — passed; Workers AI, Browser Run, R2, and four Rate Limiting bindings recognized.
+- `npm audit --audit-level=low` — zero vulnerabilities.
+- Credential-free local Worker and combined Vite proxy smoke — fixture diagnosis returned 200 with a supported conclusion and exact evidence reference; structured logs omitted the question/evidence payload.
+- Real Workers AI/Gateway smoke — attempted with the production-shaped binding, but Wrangler reported that the available auth token had expired and could not refresh non-interactively. No credential was added, so real inference and Gateway dashboard observability remain unverified in this environment.
+
+Known limitations:
+
+- Submitted canonical evidence is not signed or persisted and therefore is not provenance.
+- JSON Mode is not a schema guarantee; invalid output is rejected rather than repaired or shown.
+- Output validation catches structural/citation/selected causation failures but cannot prove every interpretation semantically correct.
+- AI Gateway retention/logging follows account configuration; application logs deliberately omit full user/model content.
+- Real Workers AI and Gateway smoke requires valid Cloudflare account access. Local deterministic fixtures are explicit and do not simulate Gateway observability.
+- Vectorize/AI Search, D1, Durable Objects, Queues, authentication, persistence, collaboration, organizations, and counterfactual debugging remain unimplemented. Layer 7 has not started.

@@ -20,6 +20,10 @@ User-submitted URLs are hostile input. The Layer 5 Worker and Browser Run interc
 - Emit structured logs with request IDs and sanitized error classification; target URLs and sensitive headers are not logged.
 - Apply a native Workers Rate Limiting binding before parsing or diagnostic work. The default permits 20 investigation requests per 60 seconds for a coarse client-network key in each Cloudflare location and returns a structured 429 when exhausted.
 - Apply a second, stricter Browser Run limiter at three launches per 60 seconds before expensive work.
+- Validate AI questions and full canonical payloads before inference; cap request/context/output/tool sizes; apply separate eight/client/minute and three/payload-hash/minute AI abuse guards.
+- Treat every page-derived string as untrusted evidence, keep it out of system instructions, and expose no AI tool capable of network access, code execution, binding access, or evidence mutation.
+- Route inference through AI Gateway with cache skipped, one-attempt retry behavior, bounded metadata, and no application log of full questions, prompts, evidence, or model responses.
+- Reject invalid schema, evidence/stage/finding references, category-mismatched citations, graph mutations, excessive confidence, and unsupported causal phrasing before rendering.
 
 ## Browser navigation boundary
 
@@ -52,5 +56,11 @@ When the peer probe is unavailable, Packet Journey calls the fixed SSLMate Cert 
 The Workers Fetch API does not expose the resolved peer address and does not provide a way to pin a hostname fetch to the exact DoH answer while preserving normal TLS hostname verification. The DoH preflight therefore detects observed private answers but leaves a time-of-check/time-of-use gap if DNS changes between preflight and target fetch. Redirect revalidation and fail-closed resolution reduce the attack surface, but Packet Journey does not claim perfect rebinding prevention. The direct certificate probe is address-pinned when the runtime permits it; the fixed CT fallback does not connect to the submitted destination.
 
 Both bindings are intentionally abuse brakes, not accurate accounting: Cloudflare documents native counters as permissive, eventually consistent, and local to each location, and shared IPs may group legitimate users. Per-user or organization quotas await the identity model in a later layer.
+
+## AI trust boundary
+
+The model receives a bounded copy of the submitted investigation, not authority over Worker diagnostics. Prompt-like page titles, TXT values, headers, console strings, certificate fields, URLs, and errors remain JSON data. The tool registry reads only the already supplied investigation and cannot perform target fetches. Output validation reduces structural and citation failures but cannot prove every interpretation semantically correct; confidence and uncertainty remain visible.
+
+Layer 6 has no server-side investigation store or signing key. A malicious client can submit a schema-valid fabricated investigation, so diagnosis is not evidence provenance. Gateway account logging/retention is an operator responsibility. See [ai-trust-boundary.md](./ai-trust-boundary.md).
 
 Queues were not introduced because the bounded synchronous browser flow fits the current endpoint contract. If production evidence later requires queued retries, they must be bounded and idempotent. Organization audit trails and durable access permissions remain unimplemented.

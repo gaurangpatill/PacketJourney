@@ -11,6 +11,8 @@ Packet Journey separates collection, interpretation, and presentation.
 7. Pure deterministic modules create evidence-linked DNS, TLS, cache, security-header, redirect, infrastructure, and browser findings.
 8. The Worker adapter creates and runtime-validates the canonical investigation model, including resource branches and terminal/partial browser states.
 9. The React client renders the same model as a graph, timeline, evidence inspector, screenshot panel, waterfall, and findings. Recorded examples enter at this same boundary but remain visibly labeled.
+10. A separate diagnosis endpoint validates a submitted canonical investigation, selects bounded evidence, optionally executes approved read-only views, and sends structured requests through the Workers AI binding and AI Gateway.
+11. Cross-reference validation rejects invented evidence, findings, stages, graph mutations, and overconfident unsupported conclusions before the assistant panel receives output.
 
 ## Layer 5 runtime boundary
 
@@ -37,6 +39,11 @@ flowchart LR
     ADAPTER --> C
     TRACE -->|partial error| ADAPTER
     BROWSER -->|partial or unavailable| ADAPTER
+    ADAPTER --> SELECT[Bounded AI evidence selector]
+    SELECT --> WAI[Workers AI through AI Gateway]
+    WAI <--> TOOLS[Restricted read-only tool registry]
+    WAI --> VALIDATE[Schema + evidence-reference validation]
+    VALIDATE --> AIPANEL[AI panel + graph emphasis]
 ```
 
 The Worker is divided into routing/environment/error/logging, `security/`, `diagnostics/`, `browser/`, `artifacts/`, `findings/`, and `adapters/` modules. No Worker module emits graph-library types. Browser Run, R2, and the React UI communicate only through canonical diagnostic/evidence contracts. The API response passes the same `Investigation` runtime schema as fixtures before it reaches the client.
@@ -49,6 +56,6 @@ The SVG canvas owns only viewport interaction. A shared journey controller synch
 
 This separation keeps future Worker responses independent of rendering technology and lets graph generation and layout be tested without a browser. See [journey-visualization.md](./journey-visualization.md).
 
-Cloudflare services are introduced only with a concrete responsibility. Workers provides the API runtime, structured logs, orchestration, HTTP/DoH calls, a restricted `node:tls` attempt, and native Rate Limiting bindings. Browser Run provides an isolated Chromium session after HTTP verification. R2 stores bounded screenshots outside investigation JSON. Cloudflare's public 1.1.1.1 DoH supplies safety and resolver evidence. SSLMate Cert Spotter remains a narrowly scoped certificate fallback. Queues are intentionally absent because the bounded synchronous run is currently reliable; Durable Objects, D1, AI Gateway, Workers AI, and Vectorize remain unimplemented.
+Cloudflare services are introduced only with a concrete responsibility. Workers provides APIs and orchestration; Browser Run provides isolated Chromium evidence; R2 stores screenshots; Workers AI interprets bounded evidence; AI Gateway supplies inference observability/routing with caching disabled; native Rate Limiting bindings protect diagnostic and AI work. Cloudflare DoH supplies resolver evidence, and SSLMate Cert Spotter remains a narrowly scoped certificate fallback. Queues, Durable Objects, D1, Vectorize, identity, and collaboration remain unimplemented.
 
-See [browser-investigation.md](./browser-investigation.md), [browser-artifacts.md](./browser-artifacts.md), [http-diagnostics.md](./http-diagnostics.md), [dns-tls-diagnostics.md](./dns-tls-diagnostics.md), [cloudflare-runtime.md](./cloudflare-runtime.md), and [implementation-plan.md](./implementation-plan.md).
+See [ai-investigation.md](./ai-investigation.md), [ai-trust-boundary.md](./ai-trust-boundary.md), [browser-investigation.md](./browser-investigation.md), [browser-artifacts.md](./browser-artifacts.md), [http-diagnostics.md](./http-diagnostics.md), [dns-tls-diagnostics.md](./dns-tls-diagnostics.md), [cloudflare-runtime.md](./cloudflare-runtime.md), and [implementation-plan.md](./implementation-plan.md).

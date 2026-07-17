@@ -24,6 +24,26 @@ type InvestigationErrorResponse = {
 };
 ```
 
+Layer 6 adds a separate runtime-validated envelope without modifying `Investigation`:
+
+```ts
+type DiagnoseInvestigationRequest = {
+  question: string;
+  expertiseMode: "beginner" | "developer" | "network-engineer";
+  investigation: Investigation;
+  selectedStageId?: string;
+};
+
+type DiagnoseInvestigationResponse = {
+  diagnosis: AiDiagnosis;
+  usage?: AiUsageSummary;
+};
+```
+
+`AiDiagnosis` is transient interpretation. Its findings/actions cite existing evidence IDs, deterministic-finding links cite existing finding IDs, and display instructions cite existing stage/evidence IDs. It distinguishes supported, likely, inconclusive, and unsupported conclusions, records uncertainty, model, prompt version, source, and generation time, and never mutates the submitted investigation. Zod validation plus cross-reference/category/causation rules reject the entire model result rather than adding partial arbitrary text.
+
+The endpoint validates canonical shape but, without D1 or a signature, cannot attest that the client-submitted investigation originated from this Worker. `AiUsageSummary` contains bounded operational metadata and counts—not prompts, full evidence, or model responses.
+
 DNS query/record/alias/address results, certificate observations, HTTP diagnostics, Browser Run results, and R2 storage operations are internal Worker contracts. The adapter maps them into evidence and stages; resolver responses, redirects, headers, browser resources, cache/security classifications, and errors do not leak visualization positions into the domain model.
 
 Browser evidence has its own requested/final URL, status, readiness, navigation metrics, bounded resources, aggregate summary, console entries, blocked requests, structured errors, collection timestamps, and limitations. Resource groups become ordinary `resource` or `third-party` stages with semantic `branch` hints. Worker document receipt remains an `origin` stage, so the schema never implies rendering when Browser Run was unavailable.

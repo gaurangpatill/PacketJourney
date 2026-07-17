@@ -1,6 +1,6 @@
 # Cloudflare Workers runtime notes
 
-Layer 5 uses Wrangler 4, an ES-module Worker, `nodejs_compat`, and a dated `wrangler.jsonc` compatibility contract. `npm run dev:worker` runs locally without Cloudflare credentials; `npm run build:worker` performs a production dry run.
+Packet Journey uses Wrangler 4, an ES-module Worker, `nodejs_compat`, and dated production/local configuration contracts. `npm run dev:worker` uses the credential-free local fixture config; `npm run build:worker` dry-runs the production bindings.
 
 ## Capabilities used
 
@@ -33,6 +33,10 @@ Layer 5 uses Wrangler 4, an ES-module Worker, `nodejs_compat`, and a dated `wran
 - Local `wrangler dev` supports Browser Run and simulated R2. Local Browser Run requests above 1 MB have a documented limitation, so public validation uses small pages and deterministic fixtures remain the primary tests.
 - Browser request/response events and Performance APIs expose page-level evidence, but do not turn the separate Worker fetch into a browser connection trace. Transfer size can be missing for cross-origin/cached resources.
 - R2 Worker bindings provide `put`/`get`; buckets remain private unless explicitly exposed. Packet Journey exposes only a derived, read-only artifact route and does not configure a public bucket.
+- The `AI` binding exposes `env.AI.run`. Packet Journey passes the current third-argument `gateway` options with a configured ID, `skipCache: true`, bounded metadata, Gateway logging enabled, request timeout, and one attempt.
+- Workers AI JSON Mode can request a JSON schema but does not guarantee compliance. Packet Journey performs independent Zod and reference validation and never streams raw model output.
+- The default Llama 3.3 70B fast registry entry has a documented 24,000-token context; Packet Journey uses an 18,000-character evidence cap plus bounded prompt/tool output rather than treating the full window as available.
+- Cloudflare's platform text-generation limit and account billing apply in addition to stricter application rate bindings and two-model-request maximum.
 
 ## Environments and deployment
 
@@ -54,6 +58,8 @@ npx wrangler secret put CERTSPOTTER_API_TOKEN
 ```
 
 No Cloudflare account API token is read by application code. Wrangler authentication is used only by the deployment CLI. Preview/production require the private `packet-journey-browser-artifacts-preview` and `packet-journey-browser-artifacts` buckets configured in `wrangler.jsonc`; configure a one-day lifecycle deletion rule for the screenshot prefix.
+
+Workers AI also needs no application API key: `wrangler.jsonc` declares the binding. `AI_GATEWAY_ID` is configuration rather than a secret. Because Wrangler AI bindings always access a remote resource, credential-free `npm run dev` uses `wrangler.local.jsonc` without that binding and with fixture mode enabled. `npm run dev:worker:ai` uses the production-shaped binding and requires Wrangler account access. Gateway observability and retention follow the Cloudflare account configuration.
 
 ## Known limitation
 
