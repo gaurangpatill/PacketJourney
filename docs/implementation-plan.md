@@ -20,7 +20,7 @@ PacketJourney/
 │   ├── styles/                 # Design tokens and global styles
 │   └── test/                   # Test setup and shared test utilities
 │   ├── worker/                 # Layer 3+ Cloudflare Worker entry and services
-│   │   ├── diagnostics/        # Small deterministic HTTP diagnostic tools
+│   │   ├── diagnostics/        # Small deterministic HTTP, DNS, and TLS tools
 │   │   ├── findings/           # Evidence-linked deterministic rules
 │   │   ├── adapters/           # Diagnostic results to shared investigation schema
 │   │   └── security/           # URL, IP, redirect, timeout, and SSRF policy
@@ -65,7 +65,7 @@ In Layer 1, the orchestrator boundary is represented by seeded mock investigatio
 - [x] Layer 1 — Product foundation
 - [x] Layer 2 — Adaptive journey visualization
 - [x] Layer 3 — Deterministic HTTP investigation and SSRF-safe fetch
-- [ ] Layer 4 — DNS and TLS investigation
+- [ ] Layer 4 — DNS and TLS investigation (in progress: audit and runtime validation complete)
 - [ ] Layer 5 — Browser investigation
 - [ ] Layer 6 — Deterministic findings engine
 - [ ] Layer 7 — Evidence-grounded AI investigation
@@ -118,6 +118,41 @@ Runtime decisions and limits to validate:
 - Use Cloudflare's fixed DNS-over-HTTPS endpoint as a defensive preflight for hostname A/AAAA answers. This can reject observed private answers but cannot pin the subsequent Workers `fetch` connection to those answers, so it reduces rather than eliminates DNS-rebinding risk.
 - Report `performance.now()` durations only around Worker subrequests. DNS, TCP, TLS, origin-only, and browser-render timing are unavailable and must not be synthesized.
 - Keep the redirect and resolver subrequest budget comfortably below the Workers Free plan limit and avoid parallel open connections beyond runtime limits.
+
+## Layer 4 implementation plan
+
+Objective: extend the existing single Worker investigation pipeline with bounded DNS record and alias diagnostics plus independently collected certificate evidence. The Worker continues to return one canonical `Investigation`; the graph receives no DNS- or TLS-specific rendering types. Browser execution, AI, persistence, and all Layer 5+ services remain out of scope.
+
+Likely files:
+
+- `src/worker/diagnostics/dns.ts` and focused record/CNAME fixtures for typed A, AAAA, CNAME, CAA, NS, MX, and sanitized TXT collection.
+- `src/worker/security/dns.ts`, `ip.ts`, and `ssrf.ts` for a shared resolver client and one address-classification policy used by both diagnostics and destination validation.
+- `src/worker/diagnostics/certificate.ts` for a timeout-bounded, port-443-only `node:tls` probe, normalized certificate fields, hostname verification, and structured unavailability.
+- `src/worker/diagnostics/orchestrator.ts` for ordered DNS, certificate, and existing HTTP redirect work with per-request hostname deduplication and partial-result preservation.
+- `src/worker/findings/dnsTlsFindings.ts` and `src/worker/adapters/investigation.ts` for evidence-linked findings and readable DNS/TLS journey stages.
+- Existing shared schemas, Worker environment/route configuration, inspector presentation helpers, fixtures, and deterministic unit/integration tests where genuine Layer 4 data requires additions.
+- `README.md` and the architecture, security, pipeline, data-model, HTTP/runtime, and new DNS/TLS diagnostic documentation.
+
+Acceptance criteria:
+
+- The existing `POST /api/v1/investigations/http` endpoint remains compatible and returns one runtime-validated canonical investigation containing DNS, certificate, redirect, HTTP, cache, and document-received stages as evidence permits.
+- DNS queries are typed, bounded, deduplicated, timestamped, sourced, sanitized, and retain TTL, response code, and resolver-reported DNSSEC metadata without claiming authoritative traversal.
+- CNAME reconstruction is stable and bounded, detects loops and missing terminal addresses, preserves partial evidence, and never infers provider ownership from an alias.
+- Every returned address uses the Layer 3 IP policy source of truth; mixed permitted/prohibited answers fail closed for network access and remain explicit diagnostic evidence.
+- HTTPS hostnames receive at most a small bounded set of independent certificate probes after DNS/SSRF validation. Exact SAN and accepted single-label wildcard coverage, validity, issuer, algorithms where exposed, and structured probe errors are deterministic and fixture-tested.
+- TLS version, cipher, ALPN, TCP time, handshake time, and the exact certificate used by the separate Worker `fetch` session remain explicitly unavailable; incoming `request.cf` metadata is never misrepresented as target metadata.
+- DNS or certificate failures preserve all completed evidence. Certificate-probe failure alone does not label the target certificate invalid and does not discard a successful HTTP result.
+- Initial, final, and meaningful cross-domain redirect hostnames are deduplicated within strict DNS-query, alias-depth, record, SAN, certificate-probe, overall-time, and output limits.
+- Expertise modes change presentation depth only. DNS/TLS nodes remain selectable and readable in the existing timeline, graph, and evidence inspector on desktop and narrow layouts.
+- Formatting, strict TypeScript, zero-warning ESLint, deterministic unit/integration/component tests, frontend build, Worker dry-run, dependency audit, Worker/combined smoke tests, and all Layer 1–3 regressions pass.
+
+Runtime decisions and limits to validate:
+
+- Cloudflare's DNS-over-HTTPS JSON endpoint supplies recursive resolver evidence. Its `AD` signal means the resolver reports every answer record as DNSSEC-verified; it is not proof that the domain's complete DNSSEC posture is secure. Resolver errors and absence of `AD` remain distinguishable from validation failure.
+- The JSON DoH shape is provider-specific rather than an IETF-standard schema. Runtime validation, record/output bounds, and conservative parsing are mandatory; a future wire-format client can replace it behind the same tool interface.
+- Cloudflare documents `node:tls` client support with `nodejs_compat`. The certificate probe is restricted to a prevalidated hostname, SNI equal to that hostname, and port 443; no user-selected port or unrestricted socket API is exposed.
+- The independent TLS probe is not the HTTP subrequest. Platform socket restrictions, runtime incompatibilities, or target behavior may make certificate evidence unavailable even while `fetch` succeeds; this produces a warning/unavailable state, not a certificate-validity claim.
+- Normal Worker `fetch` does not expose its outbound TLS protocol, cipher, ALPN, peer chain, or phase timing. Only total probe duration and HTTP subrequest duration are measured.
 
 ## Risks and runtime limitations
 
