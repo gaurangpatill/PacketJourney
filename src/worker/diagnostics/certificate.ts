@@ -4,10 +4,14 @@ import {
   type PeerCertificate,
   type TLSSocket,
 } from "node:tls";
+import { z } from "zod";
+import { logEvent } from "../logging";
 
 export const MAX_SAN_VALUES = 100;
 export const MAX_CERTIFICATE_CHAIN_DEPTH = 6;
-export const DEFAULT_CERTIFICATE_TIMEOUT_MS = 5_000;
+export const DEFAULT_CERTIFICATE_TIMEOUT_MS = 8_000;
+export const CERTSPOTTER_ENDPOINT = "https://api.certspotter.com/v1/issuances";
+export const CERTSPOTTER_RESPONSE_LIMIT = 262_144;
 
 export interface CertificateNameCoverage {
   covered: boolean;
@@ -53,7 +57,8 @@ export interface CertificateEvidence {
   publicKeyBits?: number;
   publicKeyCurve?: string;
   signatureAlgorithm: "unavailable";
-  source: "Independent Cloudflare Worker node:tls certificate probe";
+  observationKind: "served-peer" | "certificate-transparency";
+  source: string;
   collectedAt: string;
   durationMs: number;
   fetchSessionMetadata: {
@@ -67,12 +72,17 @@ export interface CertificateEvidence {
 }
 
 export type CertificateDiagnosticErrorCode =
-  "probe_timeout" | "probe_connection_failed" | "certificate_unavailable" | "certificate_malformed";
+  | "probe_timeout"
+  | "probe_connection_failed"
+  | "certificate_unavailable"
+  | "certificate_malformed"
+  | "certificate_transparency_unavailable";
 
 export interface CertificateDiagnosticError {
   code: CertificateDiagnosticErrorCode;
   message: string;
   retryable: boolean;
+  details?: Record<string, string | number | boolean>;
 }
 
 export interface CertificateDiagnosticResult {
@@ -300,6 +310,7 @@ export function normalizePeerCertificate(
       ? { publicKeyCurve: certificate.nistCurve ?? certificate.asn1Curve }
       : {}),
     signatureAlgorithm: "unavailable",
+    observationKind: "served-peer",
     source: "Independent Cloudflare Worker node:tls certificate probe",
     collectedAt: collectedAt.toISOString(),
     durationMs,
@@ -377,7 +388,8 @@ export class WorkerTlsCertificateInspector implements CertificateInspector {
       }, timeoutMs);
 
       try {
-        socket = this.connector(
+        const connector = this.connector;
+        socket = connector(
           {
             host: connectionAddress,
             port: 443,
@@ -456,5 +468,255 @@ export class UnavailableCertificateInspector implements CertificateInspector {
         retryable: true,
       },
     });
+  }
+}
+
+const certSpotterIssuanceSchema = z.object({
+  id: z.string().max(256),
+  cert_sha256: z.string().max(256).optional(),
+  dns_names: z.array(z.string().max(1_024)).max(1_000).optional(),
+  issuer: z
+    .object({
+      name: z.string().max(4_096).optional(),
+      friendly_name: z.string().max(1_024).optional(),
+    })
+    .optional(),
+  not_before: z.string().max(128),
+  not_after: z.string().max(128),
+});
+
+const certSpotterResponseSchema = z.array(certSpotterIssuanceSchema).max(100);
+
+export interface CertSpotterInspectorOptions {
+  fetcher?: typeof fetch;
+  apiToken?: string;
+}
+
+export class CertSpotterCertificateInspector implements CertificateInspector {
+  private readonly fetcher: typeof fetch;
+  private readonly apiToken?: string;
+
+  constructor(options: CertSpotterInspectorOptions = {}) {
+    this.fetcher = options.fetcher ?? fetch;
+    this.apiToken = options.apiToken;
+  }
+
+  async inspect(
+    hostname: string,
+    connectionAddress: string,
+    options: CertificateInspectionOptions = {},
+  ): Promise<CertificateDiagnosticResult> {
+    const monotonicNow = options.monotonicNow ?? (() => performance.now());
+    const wallClockNow = options.wallClockNow ?? (() => new Date());
+    const startedTick = monotonicNow();
+    const startedAt = wallClockNow().toISOString();
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(),
+      options.timeoutMs ?? DEFAULT_CERTIFICATE_TIMEOUT_MS,
+    );
+    const finish = (
+      fields: Pick<CertificateDiagnosticResult, "status"> &
+        Partial<Pick<CertificateDiagnosticResult, "certificate" | "error">>,
+    ): CertificateDiagnosticResult => ({
+      hostname: hostnameToAscii(hostname),
+      connectionAddress,
+      startedAt,
+      completedAt: wallClockNow().toISOString(),
+      durationMs: roundedDuration(startedTick, monotonicNow()),
+      ...fields,
+    });
+
+    try {
+      const endpoint = new URL(CERTSPOTTER_ENDPOINT);
+      endpoint.searchParams.set("domain", hostnameToAscii(hostname));
+      endpoint.searchParams.set("include_subdomains", "false");
+      endpoint.searchParams.append("expand", "dns_names");
+      endpoint.searchParams.append("expand", "issuer");
+      const fetcher = this.fetcher;
+      const response = await fetcher(endpoint, {
+        method: "GET",
+        headers: {
+          accept: "application/json",
+          "user-agent": "PacketJourney/0.4 (+https://github.com/gaurangpatill/PacketJourney)",
+          ...(this.apiToken ? { authorization: `Bearer ${this.apiToken}` } : {}),
+        },
+        redirect: "manual",
+        cache: "no-store",
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        await response.body?.cancel();
+        return finish({
+          status: "warning",
+          error: {
+            code: "certificate_transparency_unavailable",
+            message:
+              "The bounded Certificate Transparency fallback did not return certificate data.",
+            retryable: response.status >= 500 || response.status === 429,
+            details: { providerStatus: response.status },
+          },
+        });
+      }
+      const declaredLength = Number.parseInt(response.headers.get("content-length") ?? "0", 10);
+      if (declaredLength > CERTSPOTTER_RESPONSE_LIMIT) {
+        await response.body?.cancel();
+        return finish({
+          status: "warning",
+          error: {
+            code: "certificate_transparency_unavailable",
+            message: "The Certificate Transparency response exceeded the safety limit.",
+            retryable: false,
+          },
+        });
+      }
+      const text = await response.text();
+      if (text.length > CERTSPOTTER_RESPONSE_LIMIT) {
+        return finish({
+          status: "warning",
+          error: {
+            code: "certificate_transparency_unavailable",
+            message: "The Certificate Transparency response exceeded the safety limit.",
+            retryable: false,
+          },
+        });
+      }
+
+      let decodedJson: unknown;
+      try {
+        decodedJson = JSON.parse(text) as unknown;
+      } catch {
+        decodedJson = undefined;
+      }
+      const decoded = certSpotterResponseSchema.safeParse(decodedJson);
+      if (!decoded.success || decoded.data.length === 0) {
+        return finish({
+          status: "warning",
+          error: {
+            code: "certificate_transparency_unavailable",
+            message:
+              "No bounded Certificate Transparency issuance was available for this hostname.",
+            retryable: true,
+            details: {
+              reason: decoded.success ? "empty_response" : "invalid_response_shape",
+            },
+          },
+        });
+      }
+
+      const issuance = [...decoded.data].sort(
+        (left, right) => Date.parse(right.not_after) - Date.parse(left.not_after),
+      )[0];
+      if (!issuance) throw new Error("Missing issuance");
+      const collectedAt = wallClockNow();
+      const validFrom = parseCertificateDate(issuance.not_before);
+      const validUntil = parseCertificateDate(issuance.not_after);
+      const allSans = [...new Set((issuance.dns_names ?? []).map(hostnameToAscii))];
+      const subjectAlternativeNames = allSans.slice(0, MAX_SAN_VALUES);
+      const durationMs = roundedDuration(startedTick, monotonicNow());
+      const certificate: CertificateEvidence = {
+        requestedHostname: hostnameToAscii(hostname),
+        connectionHostname: hostnameToAscii(hostname),
+        connectionAddress,
+        subject: {},
+        subjectAlternativeNames,
+        sanValuesTruncated: allSans.length > MAX_SAN_VALUES,
+        issuer: {
+          ...(issuance.issuer?.name ? { commonName: issuance.issuer.name } : {}),
+          ...(issuance.issuer?.friendly_name
+            ? { organization: [issuance.issuer.friendly_name] }
+            : {}),
+        },
+        serialNumber: "unavailable",
+        ...(issuance.cert_sha256 ? { fingerprint256: issuance.cert_sha256 } : {}),
+        validFrom,
+        validUntil,
+        ...validity(validFrom, validUntil, collectedAt),
+        hostnameCoverage: verifyCertificateHostname(hostname, subjectAlternativeNames),
+        chain: [],
+        chainTruncated: false,
+        publicKeyAlgorithm: "unknown",
+        signatureAlgorithm: "unavailable",
+        observationKind: "certificate-transparency",
+        source: "SSLMate Cert Spotter Certificate Transparency Search API",
+        collectedAt: collectedAt.toISOString(),
+        durationMs,
+        fetchSessionMetadata: {
+          tlsVersion: "unavailable",
+          cipherSuite: "unavailable",
+          alpn: "unavailable",
+          handshakeDurationMs: "unavailable",
+          tcpDurationMs: "unavailable",
+          explanation:
+            "This certificate was observed in Certificate Transparency, not in the separate Worker HTTP fetch session.",
+        },
+      };
+      return finish({ status: "warning", certificate });
+    } catch (error) {
+      const timedOut =
+        controller.signal.aborted || (error instanceof Error && error.name === "AbortError");
+      logEvent("warn", "certificate_transparency.failed", {
+        errorName: error instanceof Error ? error.name : "UnknownError",
+        errorMessage: error instanceof Error ? error.message : "Unknown certificate API failure",
+      });
+      return finish({
+        status: "warning",
+        error: timedOut
+          ? {
+              code: "probe_timeout",
+              message: "The Certificate Transparency fallback exceeded its timeout.",
+              retryable: true,
+              details: { reason: "timeout" },
+            }
+          : {
+              code: "certificate_transparency_unavailable",
+              message:
+                "The Certificate Transparency fallback returned malformed or unavailable data.",
+              retryable: true,
+              details: { reason: "fetch_or_parse_failure" },
+            },
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+}
+
+export class FallbackCertificateInspector implements CertificateInspector {
+  constructor(
+    private readonly primary: CertificateInspector,
+    private readonly fallback: CertificateInspector,
+  ) {}
+
+  async inspect(
+    hostname: string,
+    connectionAddress: string,
+    options: CertificateInspectionOptions = {},
+  ): Promise<CertificateDiagnosticResult> {
+    const primary = await this.primary.inspect(hostname, connectionAddress, options);
+    if (primary.certificate) return primary;
+    const fallback = await this.fallback.inspect(hostname, connectionAddress, options);
+    if (!fallback.certificate) {
+      return {
+        ...fallback,
+        error: {
+          ...(fallback.error ?? {
+            code: "certificate_transparency_unavailable" as const,
+            message: "Certificate inspection was unavailable.",
+            retryable: true,
+          }),
+          details: {
+            ...fallback.error?.details,
+            directProbe: primary.error?.code ?? "unavailable",
+          },
+        },
+      };
+    }
+    return {
+      ...fallback,
+      status: "warning",
+      ...(primary.error ? { error: primary.error } : {}),
+    };
   }
 }

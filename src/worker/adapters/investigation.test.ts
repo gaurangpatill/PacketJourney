@@ -100,6 +100,7 @@ function certificateEvidence(hostname = "example.com"): CertificateEvidence {
     publicKeyAlgorithm: "RSA",
     publicKeyBits: 2048,
     signatureAlgorithm: "unavailable",
+    observationKind: "served-peer",
     source: "Independent Cloudflare Worker node:tls certificate probe",
     collectedAt: completedAt,
     durationMs: 7,
@@ -427,5 +428,32 @@ describe("DNS and TLS investigation adapter", () => {
     expect(
       tlsFindings.flatMap((finding) => finding.evidenceIds).every((id) => tlsEvidenceIds.has(id)),
     ).toBe(true);
+  });
+
+  it("does not treat CT issuance metadata as the certificate served by HTTP fetch", () => {
+    const issuance = certificateEvidence();
+    issuance.observationKind = "certificate-transparency";
+    issuance.source = "Fixture Certificate Transparency API";
+    issuance.validityStatus = "expired";
+    issuance.daysUntilExpiration = -2;
+    issuance.hostnameCoverage = {
+      covered: false,
+      matchType: "none",
+      explanation: "Fixture mismatch.",
+    };
+    const investigation = adaptNetworkDiagnosticToInvestigation(
+      network(diagnostic(), {
+        certificates: [{ ...certificateResult(), status: "warning", certificate: issuance }],
+      }),
+      { id: "ct-only" },
+    );
+    const tlsFindings = investigation.findings.filter((finding) => finding.category === "tls");
+    expect(tlsFindings).toEqual([
+      expect.objectContaining({
+        title: "Certificate Transparency issuance observed",
+        severity: "info",
+      }),
+    ]);
+    expect(investigation.stages.find((stage) => stage.type === "tls")?.status).toBe("warning");
   });
 });

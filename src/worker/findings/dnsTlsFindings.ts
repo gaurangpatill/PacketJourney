@@ -138,6 +138,19 @@ export function createDnsTlsFindings(
     }
 
     const certificate = result.certificate;
+    if (certificate.observationKind === "certificate-transparency") {
+      findings.push({
+        id: `tls-transparency-issuance-${result.hostname}`,
+        severity: "info",
+        category: "tls",
+        title: "Certificate Transparency issuance observed",
+        explanation:
+          "A bounded CT search returned an unexpired issuance covering this hostname. CT evidence does not prove that the website currently serves this certificate.",
+        evidenceIds: [evidence.certificateId ?? evidence.limitationsId],
+        confidence: 1,
+      });
+      continue;
+    }
     if (certificate.validityStatus === "expired") {
       findings.push({
         id: `tls-expired-${result.hostname}`,

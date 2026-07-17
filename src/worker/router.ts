@@ -6,6 +6,8 @@ import {
 import { adaptNetworkDiagnosticToInvestigation } from "./adapters/investigation";
 import {
   type CertificateInspector,
+  CertSpotterCertificateInspector,
+  FallbackCertificateInspector,
   UnavailableCertificateInspector,
   WorkerTlsCertificateInspector,
 } from "./diagnostics/certificate";
@@ -179,7 +181,10 @@ export function createRouter(dependencies: RouterDependencies = {}) {
             ? new UnavailableCertificateInspector(
                 "Certificate inspection was unavailable in the configured diagnostic runtime.",
               )
-            : new WorkerTlsCertificateInspector());
+            : new FallbackCertificateInspector(
+                new WorkerTlsCertificateInspector(),
+                new CertSpotterCertificateInspector({ apiToken: env.CERTSPOTTER_API_TOKEN }),
+              ));
         const diagnostic = await investigateNetworkJourney(
           parsedRequest.data.url,
           readRuntimeLimits(env),

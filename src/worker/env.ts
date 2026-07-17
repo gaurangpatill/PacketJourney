@@ -6,6 +6,7 @@ export interface Env {
   HTTP_INVESTIGATION_RATE_LIMITER?: RateLimit;
   DNS_TIMEOUT_MS?: string;
   CERTIFICATE_TIMEOUT_MS?: string;
+  CERTSPOTTER_API_TOKEN?: string;
 }
 
 export interface RuntimeLimits {
@@ -21,7 +22,7 @@ export interface RuntimeLimits {
 const DEFAULT_HOP_TIMEOUT_MS = 8_000;
 const DEFAULT_OVERALL_TIMEOUT_MS = 20_000;
 const DEFAULT_DNS_TIMEOUT_MS = 5_000;
-const DEFAULT_CERTIFICATE_TIMEOUT_MS = 5_000;
+const DEFAULT_CERTIFICATE_TIMEOUT_MS = 8_000;
 
 function boundedInteger(value: string | undefined, fallback: number, maximum: number): number {
   if (!value) return fallback;

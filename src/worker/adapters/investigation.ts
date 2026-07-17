@@ -334,9 +334,11 @@ function certificateStage(
       evidence(
         `${prefix}-summary`,
         "Certificate summary",
-        certificate.hostnameCoverage.covered
-          ? `The observed certificate covers ${result.hostname} and is ${certificate.validityStatus}.`
-          : `The observed certificate does not cover ${result.hostname}.`,
+        certificate.observationKind === "certificate-transparency"
+          ? `Certificate Transparency contains an issuance covering ${result.hostname}; this is not proof that the site currently serves it.`
+          : certificate.hostnameCoverage.covered
+            ? `The observed peer certificate covers ${result.hostname} and is ${certificate.validityStatus}.`
+            : `The observed peer certificate does not cover ${result.hostname}.`,
         "Deterministic summary of independently observed certificate fields",
         certificate.collectedAt,
         "inferred",
@@ -346,8 +348,12 @@ function certificateStage(
         "Normalized certificate",
         {
           requestedHostname: certificate.requestedHostname,
-          connectionHostname: certificate.connectionHostname,
-          connectionAddress: certificate.connectionAddress,
+          ...(certificate.observationKind === "served-peer"
+            ? {
+                connectionHostname: certificate.connectionHostname,
+                connectionAddress: certificate.connectionAddress,
+              }
+            : { validatedTargetAddress: certificate.connectionAddress }),
           subject: certificate.subject,
           subjectAlternativeNames: certificate.subjectAlternativeNames,
           sanValuesTruncated: certificate.sanValuesTruncated,
@@ -360,6 +366,7 @@ function certificateStage(
           publicKeyBits: certificate.publicKeyBits ?? "unavailable",
           publicKeyCurve: certificate.publicKeyCurve ?? "unavailable",
           signatureAlgorithm: certificate.signatureAlgorithm,
+          observationKind: certificate.observationKind,
         },
         certificate.source,
         certificate.collectedAt,
@@ -442,6 +449,7 @@ function certificateStage(
     certificate?.daysUntilExpiration !== undefined &&
     certificate.daysUntilExpiration >= 0 &&
     certificate.daysUntilExpiration <= 30;
+  const transparencyOnly = certificate?.observationKind === "certificate-transparency";
   return {
     stage: {
       id: prefix,
@@ -449,11 +457,20 @@ function certificateStage(
       title: `Certificate for ${result.hostname}`,
       shortTitle: `TLS · ${result.hostname}`,
       description: result.error
-        ? `${result.error.message} This does not prove the website certificate is invalid.`
-        : invalid
-          ? "The independently observed certificate has a validity or hostname-coverage problem."
-          : "An independent TLS probe observed a currently valid certificate covering this hostname.",
-      status: invalid ? "error" : result.error || expiringSoon ? "warning" : "success",
+        ? result.certificate
+          ? "The direct peer probe was unavailable, so bounded Certificate Transparency issuance evidence is shown instead."
+          : `${result.error.message} This does not prove the website certificate is invalid.`
+        : transparencyOnly
+          ? "Certificate Transparency issuance evidence is available, but the certificate served to Worker fetch remains unobserved."
+          : invalid
+            ? "The independently observed certificate has a validity or hostname-coverage problem."
+            : "An independent TLS probe observed a currently valid certificate covering this hostname.",
+      status:
+        invalid && !transparencyOnly
+          ? "error"
+          : result.error || expiringSoon || transparencyOnly
+            ? "warning"
+            : "success",
       startedAt: result.startedAt,
       completedAt: result.completedAt,
       durationMs: result.durationMs,

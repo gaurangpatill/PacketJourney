@@ -1,10 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { DetailedPeerCertificate } from "node:tls";
 import {
+  CertSpotterCertificateInspector,
+  FallbackCertificateInspector,
   MAX_SAN_VALUES,
   normalizePeerCertificate,
   parseDnsSubjectAlternativeNames,
   verifyCertificateHostname,
+  type CertificateInspector,
 } from "./certificate";
 
 function fixture(overrides: Partial<DetailedPeerCertificate> = {}): DetailedPeerCertificate {
@@ -158,5 +161,105 @@ describe("normalizePeerCertificate", () => {
     );
     expect(result.chain).toHaveLength(2);
     expect(result.chainTruncated).toBe(false);
+  });
+});
+
+describe("CertSpotterCertificateInspector", () => {
+  it("normalizes the latest bounded CT issuance and labels it separately from the served peer", async () => {
+    const fetcher = vi.fn().mockResolvedValue(
+      Response.json([
+        {
+          id: "older",
+          cert_sha256: "old",
+          dns_names: ["example.com"],
+          issuer: { name: "CN=Older CA", friendly_name: "Older" },
+          not_before: "2026-01-01T00:00:00Z",
+          not_after: "2026-08-01T00:00:00Z",
+        },
+        {
+          id: "newer",
+          cert_sha256: "new",
+          dns_names: ["example.com", "www.example.com"],
+          issuer: { name: "CN=Fixture CA", friendly_name: "Fixture Trust" },
+          not_before: "2026-07-01T00:00:00Z",
+          not_after: "2026-10-01T00:00:00Z",
+        },
+      ]),
+    );
+    const inspector = new CertSpotterCertificateInspector({
+      fetcher: fetcher as typeof fetch,
+      apiToken: "test-token",
+    });
+    const result = await inspector.inspect("example.com", "93.184.216.34", {
+      wallClockNow: () => new Date("2026-07-16T12:00:00.000Z"),
+    });
+
+    expect(result.status).toBe("warning");
+    expect(result.certificate).toMatchObject({
+      observationKind: "certificate-transparency",
+      fingerprint256: "new",
+      subjectAlternativeNames: ["example.com", "www.example.com"],
+      hostnameCoverage: { covered: true },
+      issuer: { organization: ["Fixture Trust"] },
+    });
+    const request = fetcher.mock.calls[0]?.[0] as URL;
+    const init = fetcher.mock.calls[0]?.[1] as RequestInit;
+    expect(request.origin + request.pathname).toBe("https://api.certspotter.com/v1/issuances");
+    expect(request.searchParams.get("domain")).toBe("example.com");
+    expect(new Headers(init.headers).get("authorization")).toBe("Bearer test-token");
+  });
+
+  it("uses CT only when the direct peer inspector is unavailable", async () => {
+    const primary: CertificateInspector = {
+      inspect: vi.fn().mockResolvedValue({
+        hostname: "example.com",
+        connectionAddress: "93.184.216.34",
+        status: "warning",
+        startedAt: "2026-07-16T12:00:00.000Z",
+        completedAt: "2026-07-16T12:00:00.000Z",
+        durationMs: 1,
+        error: { code: "probe_connection_failed", message: "Unavailable", retryable: true },
+      }),
+    };
+    const ctResult = {
+      hostname: "example.com",
+      connectionAddress: "93.184.216.34",
+      status: "warning" as const,
+      startedAt: "2026-07-16T12:00:00.000Z",
+      completedAt: "2026-07-16T12:00:00.000Z",
+      durationMs: 1,
+      certificate: {
+        ...normalizePeerCertificate(
+          "example.com",
+          "93.184.216.34",
+          fixture(),
+          new Date("2026-07-16T12:00:00.000Z"),
+          1,
+        ),
+        observationKind: "certificate-transparency" as const,
+        source: "Fixture CT source",
+      },
+    };
+    const fallback: CertificateInspector = { inspect: vi.fn().mockResolvedValue(ctResult) };
+    const result = await new FallbackCertificateInspector(primary, fallback).inspect(
+      "example.com",
+      "93.184.216.34",
+    );
+    expect(result.certificate?.observationKind).toBe("certificate-transparency");
+    expect(result.error?.code).toBe("probe_connection_failed");
+  });
+
+  it("returns a structured warning for malformed CT responses", async () => {
+    const inspector = new CertSpotterCertificateInspector({
+      fetcher: vi.fn().mockResolvedValue(Response.json({ unexpected: true })) as typeof fetch,
+    });
+    const result = await inspector.inspect("example.com", "93.184.216.34");
+    expect(result).toMatchObject({
+      status: "warning",
+      error: {
+        code: "certificate_transparency_unavailable",
+        details: { reason: "invalid_response_shape" },
+      },
+    });
   });
 });
