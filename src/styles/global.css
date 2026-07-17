@@ -928,6 +928,12 @@ a {
 .centered-state .url-form {
   margin-top: 10px;
 }
+.live-error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
 .centered-state--error > svg {
   color: var(--red);
 }
@@ -1019,6 +1025,9 @@ a {
 }
 .loading-steps i:nth-child(5)::after {
   animation-delay: 0.8s;
+}
+.loading-steps i.is-active {
+  background: rgb(246 130 31 / 24%);
 }
 @keyframes spin {
   to {
@@ -1113,6 +1122,14 @@ a {
 }
 .mock-banner strong {
   color: #cab986;
+}
+.mock-banner--live {
+  border-bottom-color: rgb(80 191 142 / 18%);
+  color: #91aa9f;
+  background: rgb(80 191 142 / 5%);
+}
+.mock-banner--live strong {
+  color: #9dd5bb;
 }
 .investigation-title {
   display: flex;

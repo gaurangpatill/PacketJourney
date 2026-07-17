@@ -22,6 +22,7 @@ import { layoutInvestigationGraph } from "../journey/layout";
 import { useJourneyController } from "../journey/useJourneyController";
 import { useReducedMotion } from "../journey/useReducedMotion";
 import type { ExpertiseMode, Investigation } from "./schema";
+import type { InvestigationApiError } from "./httpApi";
 import { StageIcon } from "./StageIcon";
 
 const expertiseCopy: Record<ExpertiseMode, { label: string; intro: string }> = {
@@ -49,7 +50,13 @@ function Metric({ label, value, note }: { label: string; value: string; note: st
   );
 }
 
-export function InvestigationWorkspace({ investigation }: { investigation: Investigation }) {
+export function InvestigationWorkspace({
+  investigation,
+  partialError,
+}: {
+  investigation: Investigation;
+  partialError?: InvestigationApiError;
+}) {
   const [expertise, setExpertise] = useState<ExpertiseMode>("developer");
   const [activeDetail, setActiveDetail] = useState<"overview" | "dns" | "tls" | "cache">(
     "overview",
@@ -109,9 +116,20 @@ export function InvestigationWorkspace({ investigation }: { investigation: Inves
         </div>
       </header>
 
-      <div className="mock-banner" role="note">
-        <Info size={14} /> <strong>Recorded demo</strong> This workspace uses stable fixture
-        evidence. Live diagnostics begin in Layer 3.
+      <div className={`mock-banner${investigation.mock ? "" : " mock-banner--live"}`} role="note">
+        <Info size={14} />
+        {investigation.mock ? (
+          <>
+            <strong>Recorded example</strong> Stable fixture evidence for repeatable product demos.
+          </>
+        ) : (
+          <>
+            <strong>{partialError ? "Partial live result" : "Live HTTP evidence"}</strong>
+            {partialError
+              ? ` The Worker stopped at ${partialError.stage ?? "HTTP"}: ${partialError.message}`
+              : " Collected by the Cloudflare Worker; no browser rendering or deep DNS/TLS inspection was performed."}
+          </>
+        )}
       </div>
 
       <section className="investigation-title section-shell">
@@ -126,7 +144,7 @@ export function InvestigationWorkspace({ investigation }: { investigation: Inves
         </div>
         <div className="investigation-title__meta">
           <span>
-            <Clock3 size={13} /> Collected 04:15 UTC
+            <Clock3 size={13} /> Collected {investigation.createdAt.slice(11, 16)} UTC
           </span>
           <span>
             <ShieldCheck size={13} />{" "}
@@ -140,7 +158,7 @@ export function InvestigationWorkspace({ investigation }: { investigation: Inves
           <div className="panel-heading">
             <div>
               <p className="panel-kicker">REQUEST JOURNEY</p>
-              <h2>URL to first render</h2>
+              <h2>{investigation.mock ? "URL to first render" : "URL to document response"}</h2>
             </div>
             <div className="panel-heading__legend">
               <span>
@@ -212,17 +230,27 @@ export function InvestigationWorkspace({ investigation }: { investigation: Inves
           <Metric
             label="Total journey"
             value={`${investigation.metrics.totalDurationMs} ms`}
-            note="URL to recorded completion"
+            note={
+              investigation.mock ? "URL to recorded completion" : "Worker investigation duration"
+            }
           />
           <Metric
             label="DNS lookup"
             value={`${investigation.metrics.dnsMs ?? "—"}${investigation.metrics.dnsMs === undefined ? "" : " ms"}`}
-            note="Resolver duration"
+            note={
+              investigation.metrics.dnsMs === undefined
+                ? "Not collected in Layer 3"
+                : "Resolver duration"
+            }
           />
           <Metric
             label="Time to first byte"
             value={`${investigation.metrics.timeToFirstByteMs ?? "—"}${investigation.metrics.timeToFirstByteMs === undefined ? "" : " ms"}`}
-            note="Document response"
+            note={
+              investigation.metrics.timeToFirstByteMs === undefined
+                ? "Not exposed by Worker fetch"
+                : "Document response"
+            }
           />
           <Metric
             label="Requests"
@@ -261,7 +289,11 @@ export function InvestigationWorkspace({ investigation }: { investigation: Inves
                 ) : null}
               </>
             ) : (
-              <p>This recorded journey has no diagnostic findings.</p>
+              <p>
+                {investigation.mock
+                  ? "This recorded journey has no diagnostic findings."
+                  : "No deterministic HTTP findings were generated from the collected evidence."}
+              </p>
             )}
           </div>
           <div className="stage-list-panel panel">

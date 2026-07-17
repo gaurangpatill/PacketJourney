@@ -789,25 +789,3 @@ export const investigations = [
 export const investigationById = new Map(investigations.map((item) => [item.id, item]));
 
 export const featuredInvestigation = slowOrigin;
-
-export function investigationForUrl(url: string): Investigation {
-  return investigationSchema.parse({
-    ...featuredInvestigation,
-    id: "url-preview",
-    title: "Investigation preview",
-    url,
-    normalizedUrl: url,
-    summary:
-      "Layer 1 uses a clearly labeled seeded diagnostic shape while live network collection is being built.",
-    stages: featuredInvestigation.stages.map((item) =>
-      item.id === "input"
-        ? {
-            ...item,
-            evidence: item.evidence.map((evidence, index) =>
-              index === 0 ? { ...evidence, value: url } : evidence,
-            ),
-          }
-        : item,
-    ),
-  });
-}
