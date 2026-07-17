@@ -17,9 +17,11 @@ const PROGRESS_MESSAGES = [
   "Tracing HTTP redirects with bounded requests…",
   "Collecting allowlisted response headers and timing…",
   "Applying deterministic cache and security rules…",
+  "Launching an isolated Cloudflare browser session…",
+  "Collecting page resources, rendering milestones, and screenshot evidence…",
   "Building the evidence-backed journey…",
 ];
-const CLIENT_TIMEOUT_MS = 30_000;
+const CLIENT_TIMEOUT_MS = 60_000;
 
 type LiveState =
   | { status: "idle" }
@@ -107,7 +109,7 @@ export function InvestigationPage() {
         <p className="eyebrow">
           <span /> Live Worker investigation
         </p>
-        <h1>Reconstructing the HTTP journey…</h1>
+        <h1>Reconstructing the page journey…</h1>
         <p>{PROGRESS_MESSAGES[liveState.progressIndex]}</p>
         <div className="loading-steps" aria-hidden="true">
           {PROGRESS_MESSAGES.map((message, index) => (

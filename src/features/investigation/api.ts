@@ -22,9 +22,16 @@ export class InvestigationApiClientError extends Error {
 }
 
 function endpointUrl(): string {
-  const baseUrl =
-    (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ?? "";
+  const baseUrl = apiBaseUrl();
   return `${baseUrl}${HTTP_INVESTIGATION_PATH}`;
+}
+
+export function apiBaseUrl(): string {
+  return (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ?? "";
+}
+
+export function artifactUrl(path: string): string {
+  return `${apiBaseUrl()}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
 function genericError(status: number): InvestigationApiError {

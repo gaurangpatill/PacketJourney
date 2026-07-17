@@ -24,6 +24,7 @@ import { useReducedMotion } from "../journey/useReducedMotion";
 import type { ExpertiseMode, Investigation } from "./schema";
 import type { InvestigationApiError } from "./httpApi";
 import { StageIcon } from "./StageIcon";
+import { BrowserEvidencePanels } from "./BrowserEvidencePanels";
 
 const expertiseCopy: Record<ExpertiseMode, { label: string; intro: string }> = {
   beginner: {
@@ -57,10 +58,11 @@ export function InvestigationWorkspace({
   investigation: Investigation;
   partialError?: InvestigationApiError;
 }) {
+  const hasBrowserEvidence = investigation.stages.some((stage) => stage.id === "browser-complete");
   const [expertise, setExpertise] = useState<ExpertiseMode>("developer");
-  const [activeDetail, setActiveDetail] = useState<"overview" | "dns" | "tls" | "cache">(
-    "overview",
-  );
+  const [activeDetail, setActiveDetail] = useState<
+    "overview" | "dns" | "tls" | "cache" | "browser"
+  >("overview");
   const graph = useMemo(() => buildInvestigationGraph(investigation), [investigation]);
   const layout = useMemo(() => layoutInvestigationGraph(graph), [graph]);
   const reducedMotion = useReducedMotion();
@@ -127,7 +129,9 @@ export function InvestigationWorkspace({
             <strong>{partialError ? "Partial live result" : "Live network evidence"}</strong>
             {partialError
               ? ` The Worker stopped at ${partialError.stage ?? "HTTP"}: ${partialError.message}`
-              : " Collected by the Cloudflare Worker with DNS, certificate, redirect, and HTTP diagnostics; no browser rendering was performed."}
+              : hasBrowserEvidence
+                ? " Collected by the Cloudflare Worker with DNS, certificate, HTTP, and isolated browser diagnostics."
+                : " Collected by the Cloudflare Worker with DNS, certificate, redirect, and HTTP diagnostics; browser evidence was unavailable."}
           </span>
         )}
       </div>
@@ -158,7 +162,11 @@ export function InvestigationWorkspace({
           <div className="panel-heading">
             <div>
               <p className="panel-kicker">REQUEST JOURNEY</p>
-              <h2>{investigation.mock ? "URL to first render" : "URL to document response"}</h2>
+              <h2>
+                {investigation.mock || hasBrowserEvidence
+                  ? "URL to browser evidence"
+                  : "URL to document response"}
+              </h2>
             </div>
             <div className="panel-heading__legend">
               <span>
@@ -213,7 +221,7 @@ export function InvestigationWorkspace({
 
       <section className="analysis-section section-shell">
         <div className="detail-tabs" role="tablist" aria-label="Investigation details">
-          {(["overview", "dns", "tls", "cache"] as const).map((tab) => (
+          {(["overview", "dns", "tls", "cache", "browser"] as const).map((tab) => (
             <button
               key={tab}
               type="button"
@@ -231,7 +239,11 @@ export function InvestigationWorkspace({
             label="Total journey"
             value={`${investigation.metrics.totalDurationMs} ms`}
             note={
-              investigation.mock ? "URL to recorded completion" : "Worker investigation duration"
+              investigation.mock
+                ? "URL to recorded completion"
+                : investigation.metrics.browserDurationMs === undefined
+                  ? "Worker investigation duration"
+                  : "Worker and browser orchestration"
             }
           />
           <Metric
@@ -266,7 +278,18 @@ export function InvestigationWorkspace({
             value={String(investigation.metrics.requestCount ?? "—")}
             note={`${investigation.metrics.thirdPartyCount ?? 0} third-party`}
           />
+          <Metric
+            label="Browser FCP"
+            value={`${investigation.metrics.firstContentfulPaintMs ?? "—"}${investigation.metrics.firstContentfulPaintMs === undefined ? "" : " ms"}`}
+            note={
+              investigation.metrics.firstContentfulPaintMs === undefined
+                ? "Unavailable in this session"
+                : "One lab browser session"
+            }
+          />
         </div>
+
+        <BrowserEvidencePanels investigation={investigation} />
 
         <div className="analysis-grid">
           <div className="finding-panel panel">
