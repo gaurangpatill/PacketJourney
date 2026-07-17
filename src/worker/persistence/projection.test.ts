@@ -4,6 +4,10 @@ import type { SavedInvestigationSummary } from "../../features/persistence/schem
 import { savedDetail, sharedProjection } from "./projection";
 import { serializeSaveRequest } from "./serialization";
 import type { InvestigationRow, ShareRow, StoredInvestigation } from "./types";
+import { diagnoseInvestigation } from "../ai/orchestrator";
+import { FixtureAiClient } from "../ai/fixture";
+import { readAiRuntimeConfig } from "../ai/config";
+import { FixtureReferenceRetriever } from "../references/retrieval";
 
 async function stored(): Promise<StoredInvestigation> {
   const source = structuredClone(investigationById.get("fast-cached")!);
@@ -127,5 +131,25 @@ describe("saved and shared projections", () => {
     const report = sharedProjection(await stored(), share(true), "a".repeat(43));
     expect(report.artifacts[0]?.url).toContain("/shared-reports/");
     expect(report.investigation.artifacts[0]?.url).toBe(report.artifacts[0]?.url);
+  });
+
+  it("shares frozen citations without the private controlled query or question hash", async () => {
+    const record = await stored();
+    const result = await diagnoseInvestigation({
+      investigation: record.investigation,
+      question: "Why was this response cached?",
+      expertiseMode: "developer",
+      client: new FixtureAiClient(),
+      config: readAiRuntimeConfig({ ENVIRONMENT: "test", AI_FIXTURE_MODE: "true" }),
+      referenceMode: "authoritative",
+      referenceRetriever: new FixtureReferenceRetriever(),
+    });
+    record.selectedDiagnosis = { diagnosis: result.diagnosis, expertiseMode: "developer" };
+    const policy = share(false);
+    policy.include_ai_diagnosis = 1;
+    const report = sharedProjection(record, policy, "a".repeat(43));
+    expect(report.selectedDiagnosis?.diagnosis.referenceCitations.length).toBeGreaterThan(0);
+    expect(report.selectedDiagnosis?.diagnosis.retrievalMetadata?.controlledQuery).toBeUndefined();
+    expect(report.selectedDiagnosis?.diagnosis.retrievalMetadata?.questionHash).toBeUndefined();
   });
 });

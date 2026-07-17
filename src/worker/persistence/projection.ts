@@ -58,6 +58,15 @@ function publicInvestigation(investigation: Investigation): Investigation {
   return investigationSchema.parse(clone);
 }
 
+function publicDiagnosis(selected: NonNullable<StoredInvestigation["selectedDiagnosis"]>) {
+  const clone = structuredClone(selected);
+  if (clone.diagnosis.retrievalMetadata) {
+    delete clone.diagnosis.retrievalMetadata.controlledQuery;
+    delete clone.diagnosis.retrievalMetadata.questionHash;
+  }
+  return clone;
+}
+
 export function savedDetail(stored: StoredInvestigation): SavedInvestigationDetail {
   const artifacts = stored.artifactRows.map((row) =>
     savedArtifact(
@@ -111,7 +120,7 @@ export function sharedProjection(
     sourceType: stored.row.source_type,
     investigation,
     ...(share.include_ai_diagnosis && stored.selectedDiagnosis
-      ? { selectedDiagnosis: stored.selectedDiagnosis }
+      ? { selectedDiagnosis: publicDiagnosis(stored.selectedDiagnosis) }
       : {}),
     ...(share.include_counterfactual && stored.selectedCounterfactual
       ? { selectedCounterfactual: stored.selectedCounterfactual }

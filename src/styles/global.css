@@ -4008,3 +4008,164 @@ a {
     border-bottom: 1px solid var(--line);
   }
 }
+.reference-mode {
+  display: flex;
+  gap: 0.35rem;
+  margin: 0.65rem 0;
+}
+
+.reference-mode button {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  padding: 0.4rem 0.65rem;
+  font: inherit;
+  font-size: 0.74rem;
+  cursor: pointer;
+}
+
+.reference-mode button[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--text);
+}
+
+.reference-provenance {
+  margin-top: 1rem;
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+}
+
+.reference-provenance__heading,
+.reference-card header,
+.reference-card footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.reference-provenance__heading h3 {
+  margin: 0.2rem 0 0;
+}
+.reference-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--muted);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+}
+.reference-status--success,
+.reference-status--fixture {
+  color: var(--success);
+}
+.reference-status--unavailable {
+  color: var(--warning);
+}
+.reference-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-top: 0.8rem;
+}
+.reference-card {
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 75%, transparent);
+  border-radius: 8px;
+  padding: 0.8rem;
+  min-width: 0;
+}
+.reference-card header span {
+  color: var(--accent);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.reference-card code {
+  color: var(--muted);
+  font-size: 0.62rem;
+  overflow-wrap: anywhere;
+}
+.reference-card h4 {
+  margin: 0.55rem 0 0.15rem;
+  font-size: 0.9rem;
+}
+.reference-card strong {
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+.reference-card p {
+  margin: 0.55rem 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+.reference-card footer {
+  align-items: flex-end;
+  font-size: 0.66rem;
+  color: var(--muted);
+}
+.reference-card footer span {
+  max-width: 70%;
+}
+.reference-card a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  white-space: nowrap;
+  color: var(--accent);
+}
+.reference-card small {
+  display: block;
+  margin-top: 0.55rem;
+  color: var(--muted);
+  font-size: 0.62rem;
+}
+.reference-empty {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.provenance-details {
+  margin-top: 0.75rem;
+}
+.provenance-details summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.provenance-details dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+.provenance-details dl div {
+  min-width: 0;
+}
+.provenance-details dt {
+  color: var(--muted);
+  font-size: 0.62rem;
+  text-transform: uppercase;
+}
+.provenance-details dd {
+  margin: 0.15rem 0 0;
+  font-size: 0.68rem;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 700px) {
+  .reference-cards,
+  .provenance-details dl {
+    grid-template-columns: 1fr;
+  }
+  .reference-mode {
+    flex-wrap: wrap;
+  }
+  .reference-provenance__heading {
+    align-items: flex-start;
+  }
+}

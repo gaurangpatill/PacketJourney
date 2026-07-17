@@ -30,6 +30,7 @@ import type { CounterfactualResult } from "../counterfactual/schemas";
 import { CounterfactualComparison } from "../counterfactual/CounterfactualComparison";
 import { SaveInvestigationDialog } from "../persistence/SaveInvestigationDialog";
 import type { SelectedDiagnosis } from "../persistence/schema";
+import { ReferenceProvenance } from "./ReferenceProvenance";
 
 const expertiseCopy: Record<ExpertiseMode, { label: string; intro: string }> = {
   beginner: {
@@ -249,6 +250,7 @@ export function InvestigationWorkspace({
               {new Date(persistedDiagnosis.diagnosis.generatedAt).toLocaleString()} · Evidence
               references preserved
             </small>
+            <ReferenceProvenance diagnosis={persistedDiagnosis.diagnosis} />
           </section>
         ) : null
       ) : (

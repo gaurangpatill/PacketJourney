@@ -62,7 +62,51 @@ describe("AI investigation panel", () => {
       "Why is this page slow?",
     );
     await user.click(screen.getByRole("button", { name: "Submit question" }));
+    const request = vi.mocked(fetch).mock.calls[0]?.[1];
+    expect(typeof request?.body).toBe("string");
+    expect(JSON.parse(request?.body as string)).toMatchObject({ referenceMode: "authoritative" });
     expect(await screen.findByText(/not sufficient for a reliable diagnosis/i)).toBeInTheDocument();
     expect(screen.getByText(/inconclusive · 20% confidence/i)).toBeInTheDocument();
+  });
+
+  it("lets keyboard users choose evidence-only mode", async () => {
+    const user = userEvent.setup();
+    const investigation = investigationById.get("fast-cached")!;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            diagnosis: {
+              ...inconclusiveDraft("Evidence only."),
+              id: "diagnosis-2",
+              question: "Explain this evidence",
+              generatedAt: "2026-07-17T12:00:00.000Z",
+              model: "fixture",
+              promptVersion: "packet-journey-ai-v1",
+              source: "fixture",
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      ),
+    );
+    render(
+      <AiInvestigationPanel
+        investigation={investigation}
+        expertise="developer"
+        onDiagnosis={() => undefined}
+        onEvidenceReference={() => undefined}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Evidence only" }));
+    await user.type(screen.getByLabelText("Ask about this investigation"), "Explain this evidence");
+    await user.click(screen.getByRole("button", { name: "Submit question" }));
+    const body = vi.mocked(fetch).mock.calls[0]?.[1]?.body;
+    expect(typeof body).toBe("string");
+    expect(JSON.parse(body as string)).toMatchObject({
+      referenceMode: "none",
+    });
+    expect(await screen.findByText("EVIDENCE ONLY")).toBeInTheDocument();
   });
 });

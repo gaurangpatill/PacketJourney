@@ -155,6 +155,73 @@ export class InvestigationRepository {
               input.selectedDiagnosis.diagnosis.generatedAt,
             ),
         );
+        const retrieval = input.selectedDiagnosis.diagnosis.retrievalMetadata;
+        if (retrieval) {
+          if (!retrieval.questionHash || !retrieval.controlledQuery) throw databaseFailure();
+          statements.push(
+            this.database
+              .prepare(
+                `INSERT INTO diagnosis_reference_runs (
+                  id, diagnosis_id, question_hash, retrieval_query, retrieval_version,
+                  embedding_model, dimensions, index_version, corpus_version, filter_json,
+                  candidate_count, selected_count, retrieval_status, retrieved_at, created_at
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)`,
+              )
+              .bind(
+                retrieval.retrievalRunId,
+                input.selectedDiagnosis.diagnosis.id,
+                retrieval.questionHash,
+                retrieval.controlledQuery,
+                retrieval.retrievalVersion,
+                retrieval.embeddingModel,
+                retrieval.dimensions,
+                retrieval.indexVersion,
+                retrieval.corpusVersion,
+                JSON.stringify(retrieval.filter),
+                retrieval.candidateCount,
+                retrieval.selectedCount,
+                retrieval.status,
+                retrieval.retrievedAt,
+                input.now,
+              ),
+          );
+          for (const citation of input.selectedDiagnosis.diagnosis.referenceCitations) {
+            statements.push(
+              this.database
+                .prepare(
+                  `INSERT INTO diagnosis_reference_citations (
+                    id, retrieval_run_id, chunk_id, source_id, rank, similarity_score,
+                    rerank_score, citation_status, citation_reason, frozen_publisher,
+                    frozen_category, frozen_title, frozen_url, frozen_heading, frozen_excerpt,
+                    frozen_content_hash, frozen_source_version, frozen_source_retrieved_at,
+                    frozen_corpus_version, created_at
+                  ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)`,
+                )
+                .bind(
+                  `${retrieval.retrievalRunId}:${citation.citationId}`,
+                  retrieval.retrievalRunId,
+                  citation.referenceChunkId,
+                  citation.sourceId,
+                  citation.rank,
+                  citation.similarityScore,
+                  citation.rerankScore,
+                  "validated",
+                  citation.selectionReason,
+                  citation.publisher,
+                  citation.category,
+                  citation.title,
+                  citation.canonicalUrl,
+                  citation.heading,
+                  citation.excerpt,
+                  citation.contentHash,
+                  citation.sourceVersion ?? null,
+                  citation.sourceRetrievedAt,
+                  citation.corpusVersion,
+                  input.now,
+                ),
+            );
+          }
+        }
       }
       if (input.selectedCounterfactual && input.selectedCounterfactualJson) {
         statements.push(

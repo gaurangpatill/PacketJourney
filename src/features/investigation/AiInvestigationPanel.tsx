@@ -10,6 +10,7 @@ import { useMemo, useRef, useState } from "react";
 import { diagnoseInvestigation, InvestigationApiClientError } from "./api";
 import type { AiDiagnosis, AiExpertiseMode, CounterfactualAiContext } from "./aiSchema";
 import type { ExpertiseMode, Investigation } from "./schema";
+import { ReferenceProvenance } from "./ReferenceProvenance";
 
 const expertiseMap: Record<ExpertiseMode, AiExpertiseMode> = {
   beginner: "beginner",
@@ -49,6 +50,7 @@ export function AiInvestigationPanel(props: {
   const [diagnosis, setDiagnosis] = useState<AiDiagnosis>();
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(false);
+  const [referenceMode, setReferenceMode] = useState<"none" | "authoritative">("authoritative");
   const controllerRef = useRef<AbortController | undefined>(undefined);
 
   async function submit(value = question) {
@@ -66,6 +68,7 @@ export function AiInvestigationPanel(props: {
         expertiseMode: expertiseMap[props.expertise],
         selectedStageId: props.selectedStageId,
         counterfactualContext: props.counterfactualContext,
+        referenceMode,
         signal: controller.signal,
       });
       setDiagnosis(response.diagnosis);
@@ -124,6 +127,24 @@ export function AiInvestigationPanel(props: {
           </button>
         )}
       </form>
+      <div className="reference-mode" role="group" aria-label="Explanation source mode">
+        <button
+          type="button"
+          aria-pressed={referenceMode === "none"}
+          onClick={() => setReferenceMode("none")}
+          disabled={loading}
+        >
+          Evidence only
+        </button>
+        <button
+          type="button"
+          aria-pressed={referenceMode === "authoritative"}
+          onClick={() => setReferenceMode("authoritative")}
+          disabled={loading}
+        >
+          Evidence + authoritative references
+        </button>
+      </div>
       {!diagnosis && !error ? (
         <div className="ai-suggestions" aria-label="Suggested investigation questions">
           {prompts.map((prompt) => (
@@ -174,6 +195,7 @@ export function AiInvestigationPanel(props: {
               ))}
             </div>
           ) : null}
+          <ReferenceProvenance diagnosis={diagnosis} />
           {diagnosis.counterfactualReferences?.length ? (
             <div className="ai-references">
               <strong>Simulation provenance</strong>

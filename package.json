@@ -26,7 +26,8 @@
     "db:reset:local": "wrangler d1 execute DB --local --config wrangler.local.jsonc --command=\"DROP TABLE IF EXISTS diagnosis_reference_citations; DROP TABLE IF EXISTS diagnosis_reference_runs; DROP TABLE IF EXISTS reference_chunks; DROP TABLE IF EXISTS reference_sources; DROP TABLE IF EXISTS artifact_cleanup_failures; DROP TABLE IF EXISTS investigation_artifacts; DROP TABLE IF EXISTS share_links; DROP TABLE IF EXISTS counterfactual_results; DROP TABLE IF EXISTS ai_diagnoses; DROP TABLE IF EXISTS investigations; DELETE FROM d1_migrations;\" && npm run db:migrate:local",
     "references:ingest": "tsx scripts/references/ingest.ts",
     "references:verify": "tsx scripts/references/verify.ts",
-    "test:retrieval": "vitest run src/references src/worker/references"
+    "test:retrieval": "vitest run src/references src/worker/references",
+    "smoke:references": "tsx scripts/references/smoke.ts"
   },
   "dependencies": {
     "ipaddr.js": "^2.4.0",
