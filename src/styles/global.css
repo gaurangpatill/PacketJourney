@@ -1785,6 +1785,8 @@ a {
     width: 100%;
   }
   .workspace-header__form .url-form {
+    width: 100%;
+    min-width: 0;
     max-width: none;
   }
   .workspace-header__tools {
@@ -1806,6 +1808,10 @@ a {
   .workspace-grid .panel {
     border-radius: 0;
     border-inline: 0;
+  }
+  .mock-banner {
+    flex-wrap: wrap;
+    text-align: center;
   }
   .journey-canvas {
     padding-inline: 15px;
@@ -1848,10 +1854,16 @@ a {
     margin-left: 3px;
   }
   .url-form--compact .url-form__field {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    gap: 8px;
   }
   .url-form--compact .button {
-    width: 100%;
+    width: auto;
+    flex: 0 0 auto;
+    padding-inline: 10px;
+  }
+  .panel-heading__legend {
+    display: none;
   }
   .metrics-grid {
     grid-template-columns: 1fr;
