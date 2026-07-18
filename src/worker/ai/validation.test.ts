@@ -56,6 +56,57 @@ describe("AI output validation", () => {
     );
   });
 
+  it("allows an evidence limitation to say that an observation does not prove a claim", () => {
+    const draft = inconclusiveDraft(
+      "The observed cache header does not prove that every response is cached.",
+    );
+    draft.summary = "The cache observation is bounded.";
+    draft.confidence = 0.65;
+    draft.conclusionType = "supported";
+    draft.primaryFinding = {
+      title: "Cache evidence observed",
+      explanation: "The recorded cache status applies to this response only.",
+      category: "cache",
+      severity: "info",
+      confidence: 0.65,
+      evidenceIds: ["cache-e1"],
+    };
+    draft.evidenceReferences = [
+      {
+        evidenceId: "cache-e1",
+        stageId: "cache",
+        claim: "The investigation recorded the cache result.",
+      },
+    ];
+    draft.graphInstructions = {
+      emphasizeStageIds: ["cache"],
+      emphasizeEvidenceIds: ["cache-e1"],
+      dimStageIds: [],
+      selectedStageId: "cache",
+      openPanel: "evidence",
+    };
+
+    expect(
+      validateAiDiagnosisOutput(draft, investigationById.get("fast-cached")!).answer,
+    ).toContain("does not prove");
+  });
+
+  it("continues to reject a positive proof claim", () => {
+    const draft = inconclusiveDraft("This observation proves the configuration is correct.");
+    draft.conclusionType = "supported";
+    draft.confidence = 0.7;
+    draft.evidenceReferences = [
+      {
+        evidenceId: "cache-e1",
+        stageId: "cache",
+        claim: "The investigation recorded the cache result.",
+      },
+    ];
+    expect(() => validateAiDiagnosisOutput(draft, investigationById.get("fast-cached")!)).toThrow(
+      /overstated certainty/i,
+    );
+  });
+
   it("rejects category-mismatched citations", () => {
     const investigation = investigationById.get("fast-cached")!;
     const draft = inconclusiveDraft("A finding was proposed.");

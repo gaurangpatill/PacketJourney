@@ -19,7 +19,18 @@ export class AiOutputError extends Error {
 }
 
 const UNSUPPORTED_CAUSAL_CLAIM =
-  /\b(definitely|proves?|caused by|the root cause|guaranteed|always|completely secure|no vulnerabilities)\b/i;
+  /\b(definitely|caused by|the root cause|guaranteed|always|completely secure|no vulnerabilities)\b/i;
+const PROOF_CLAIM = /\bproves?\b/gi;
+const NEGATED_PROOF_PREFIX =
+  /(?:\b(?:does|do|did|can|could|would|will|is|are|was|were|has|have|had)\s+not\s+|\b(?:doesn't|doesn’t|didn't|didn’t|cannot|can't|can’t|couldn't|couldn’t|wouldn't|wouldn’t)\s+|\bno\s+(?:available\s+)?evidence\s+)$/i;
+
+function hasUnsupportedCausalClaim(value: string): boolean {
+  if (UNSUPPORTED_CAUSAL_CLAIM.test(value)) return true;
+  return [...value.matchAll(PROOF_CLAIM)].some((match) => {
+    const prefix = value.slice(Math.max(0, (match.index ?? 0) - 48), match.index);
+    return !NEGATED_PROOF_PREFIX.test(prefix);
+  });
+}
 
 function allEvidenceReferences(draft: AiDiagnosisDraft) {
   return [
@@ -176,7 +187,7 @@ export function validateAiDiagnosisOutput(
     throw new AiOutputError("unsupported_claim", "An unsupported answer cannot claim confidence.");
   }
   if (
-    UNSUPPORTED_CAUSAL_CLAIM.test(`${draft.summary} ${draft.answer}`) &&
+    hasUnsupportedCausalClaim(`${draft.summary} ${draft.answer}`) &&
     draft.conclusionType !== "inconclusive"
   ) {
     throw new AiOutputError("unsupported_claim", "The model overstated certainty or causation.");
