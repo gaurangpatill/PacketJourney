@@ -112,7 +112,7 @@ export function AiInvestigationPanel(props: {
           maxLength={500}
           disabled={loading}
         />
-        <span>{loading ? "Reviewing evidence" : "Workers AI"}</span>
+        <span>{loading ? "Reviewing evidence" : "Evidence AI"}</span>
         {loading ? (
           <button
             type="button"

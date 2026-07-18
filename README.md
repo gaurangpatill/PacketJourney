@@ -103,6 +103,21 @@ npm run dev
 
 `npm run db:migrate:local` applies ordered SQL migrations to the local D1 database. `npm run dev` then starts Vite on port 5173 and a credential-free local Worker on port 8787 using `wrangler.local.jsonc`; Vite proxies `/api` to it. Local D1 and R2 data live in Wrangler's ignored local state. The local config deliberately omits the always-remote `AI` binding and enables visibly labeled deterministic fixture output. Use `npm run dev:worker:ai` with fixture mode disabled for the production-shaped AI binding when Wrangler authentication/runtime access is available. No model API key is used.
 
+There are two distinct AI development modes:
+
+```bash
+# Credential-free deterministic fixture mode (recommended for routine local work)
+npm run dev
+
+# Real Workers AI mode (run these from the repository in separate terminals)
+npx wrangler login --use-keyring
+npx wrangler whoami
+npm run dev:web
+npm run dev:worker:ai
+```
+
+`wrangler login` opens Cloudflare's OAuth flow; do it only when testing real remote bindings or deploying. The running application does not use a Cloudflare API key. Workers AI uses the `AI` binding and account identity established by Wrangler. Because Workers AI and Vectorize are remote-only bindings, real authoritative-reference mode also requires the versioned Vectorize index and ingested corpus described in [Controlled reference ingestion](./docs/reference-ingestion.md). Until that operator setup is complete, use evidence-only mode for a real-model smoke or the default fixture mode for the complete local flow.
+
 Useful split commands:
 
 ```bash
