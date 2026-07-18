@@ -17,6 +17,7 @@ import type { AiModelUsage } from "./types";
 import { validateAiDiagnosisOutput } from "./validation";
 import type { ReferenceRetriever } from "../references/retrieval";
 import type { ReferenceRetrievalResult } from "../../features/references/schema";
+import { logEvent } from "../logging";
 
 export interface AiInvestigationResult {
   diagnosis: AiDiagnosis;
@@ -122,6 +123,15 @@ export async function diagnoseInvestigation(input: {
     input.config.maximumToolRounds > 0 && input.config.maximumModelRequests > 1
       ? await input.client.plan({ question, context, config: input.config })
       : { toolCalls: [] };
+  logEvent("info", "ai.planning.completed", {
+    investigationId: input.investigation.id,
+    toolCalls: planning.toolCalls.map((call) => ({
+      name: call.name,
+      argumentType: Array.isArray(call.arguments) ? "array" : typeof call.arguments,
+      arguments:
+        call.arguments && typeof call.arguments === "object" ? call.arguments : "invalid-shape",
+    })),
+  });
   const toolResults = executeAiToolCalls({
     investigation: input.investigation,
     calls: planning.toolCalls,

@@ -101,6 +101,11 @@ function publicAiError(error: unknown): WorkerError | undefined {
     });
   }
   if (error instanceof AiOutputError || error instanceof AiToolError) {
+    logEvent("error", "ai.output.validation_failed", {
+      errorType: error.name,
+      validationCode: error.code,
+      validationMessage: error.message.slice(0, 400),
+    });
     return new WorkerError(502, {
       code: "ai_invalid_output",
       message: "The AI response failed Packet Journey's evidence validation and was not displayed.",

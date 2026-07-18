@@ -18,6 +18,7 @@ export interface Env {
   AI_FIXTURE_MODE?: string;
   AI_GATEWAY_ID?: string;
   AI_MODEL?: string;
+  AI_PLANNER_MODEL?: string;
   AI_FALLBACK_MODEL?: string;
   AI_MAX_REQUESTS?: string;
   AI_MAX_TOOL_ROUNDS?: string;

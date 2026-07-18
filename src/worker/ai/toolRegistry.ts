@@ -65,14 +65,20 @@ function unknownArray(value: unknown): unknown[] {
   return Array.isArray(value) ? (value as unknown[]) : [];
 }
 
+const optionalLimit = (maximum: number) =>
+  z.preprocess(
+    (value) => (value === null ? undefined : value),
+    z.number().int().min(1).max(maximum).optional(),
+  );
+
 const stageInput = z.object({ stageId: z.string().min(1).max(160) }).strict();
 const stageLimitInput = z
   .object({
     stageId: z.string().min(1).max(160),
-    limit: z.number().int().min(1).max(12).optional(),
+    limit: optionalLimit(12),
   })
   .strict();
-const categoryInput = z.object({ limit: z.number().int().min(1).max(15).optional() }).strict();
+const categoryInput = z.object({ limit: optionalLimit(15) }).strict();
 
 const definitions: AiToolDefinition[] = [
   {
@@ -321,9 +327,12 @@ export class AiToolError extends Error {
 
 export function modelToolDefinitions() {
   return definitions.map((definition) => ({
-    name: definition.name,
-    description: definition.description,
-    parameters: definition.parameters,
+    type: "function" as const,
+    function: {
+      name: definition.name,
+      description: definition.description,
+      parameters: definition.parameters,
+    },
   }));
 }
 

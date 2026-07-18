@@ -1,5 +1,11 @@
 import {
+  aiActionSchema,
+  aiCounterfactualReferenceSchema,
   aiDiagnosisDraftSchema,
+  aiEvidenceReferenceSchema,
+  aiFindingSchema,
+  aiTechnicalReferenceSchema,
+  aiUncertaintySchema,
   type AiCategory,
   type AiDiagnosisDraft,
   type AiFinding,
@@ -7,6 +13,7 @@ import {
 } from "../../features/investigation/aiSchema";
 import type { Investigation } from "../../features/investigation/schema";
 import { categoryForStage } from "./evidenceSelection";
+import { z } from "zod";
 
 export class AiOutputError extends Error {
   constructor(
@@ -42,6 +49,39 @@ function allEvidenceReferences(draft: AiDiagnosisDraft) {
   ];
 }
 
+function validArrayItems<T>(value: unknown, schema: z.ZodType<T>): unknown {
+  if (!Array.isArray(value)) return value;
+  return value.flatMap((item) => {
+    const parsed = schema.safeParse(item);
+    return parsed.success ? [parsed.data] : [];
+  });
+}
+
+function normalizeOptionalEnrichment(output: unknown): unknown {
+  if (!output || typeof output !== "object" || Array.isArray(output)) return output;
+  const root = output as Record<string, unknown>;
+  const primary = aiFindingSchema.safeParse(root.primaryFinding);
+  return {
+    ...root,
+    ...(root.primaryFinding === undefined
+      ? {}
+      : { primaryFinding: primary.success ? primary.data : undefined }),
+    relatedFindings: validArrayItems(root.relatedFindings, aiFindingSchema),
+    prioritizedActions: validArrayItems(root.prioritizedActions, aiActionSchema),
+    evidenceReferences: validArrayItems(root.evidenceReferences, aiEvidenceReferenceSchema),
+    technicalReferences: validArrayItems(root.technicalReferences, aiTechnicalReferenceSchema),
+    ...(root.counterfactualReferences === undefined
+      ? {}
+      : {
+          counterfactualReferences: validArrayItems(
+            root.counterfactualReferences,
+            aiCounterfactualReferenceSchema,
+          ),
+        }),
+    uncertainties: validArrayItems(root.uncertainties, aiUncertaintySchema),
+  };
+}
+
 function categoryCompatible(finding: AiFinding, categories: AiCategory[]): boolean {
   if (categories.includes(finding.category)) return true;
   if (finding.category === "security") {
@@ -61,11 +101,15 @@ export function validateAiDiagnosisOutput(
   counterfactual?: CounterfactualAiContext,
   allowedCitationIds: ReadonlySet<string> = new Set(),
 ): AiDiagnosisDraft {
-  const parsed = aiDiagnosisDraftSchema.safeParse(output);
+  const parsed = aiDiagnosisDraftSchema.safeParse(normalizeOptionalEnrichment(output));
   if (!parsed.success) {
+    const issues = parsed.error.issues
+      .slice(0, 8)
+      .map((issue) => `${issue.path.join(".") || "root"}:${issue.code}`)
+      .join(", ");
     throw new AiOutputError(
       "schema",
-      "The model response did not match the required diagnosis schema.",
+      `The model response did not match the required diagnosis schema (${issues}).`,
     );
   }
   const draft = parsed.data;

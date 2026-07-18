@@ -20,7 +20,8 @@ The existing network endpoint is unchanged. AI never re-runs HTTP, DNS, TLS, cer
 - `AI` is the Wrangler Workers AI binding.
 - `AI_ENABLED=false` disables only diagnosis.
 - `AI_GATEWAY_ID` defaults to `default`.
-- `AI_MODEL` defaults to the `llama-3.3-70b-fast` registry key.
+- `AI_MODEL` defaults to the lower-latency `granite-micro` registry key after live validation showed unacceptable tail latency from the previous 70B and GPT-OSS defaults.
+- `AI_PLANNER_MODEL` defaults to the lower-latency `granite-micro` registry key; final diagnosis remains on `AI_MODEL`.
 - `AI_FALLBACK_MODEL` is reserved configuration; no silent fallback runs in Layer 6.
 - `AI_MAX_REQUESTS`, `AI_MAX_TOOL_ROUNDS`, `AI_MAX_INPUT_CHARS`, `AI_MAX_OUTPUT_CHARS`, `AI_MAX_OUTPUT_TOKENS`, and `AI_TIMEOUT_MS` accept bounded overrides.
 - `AI_FIXTURE_MODE=true` selects deterministic output only when `ENVIRONMENT` is `development` or `test`; preview and production cannot enable it.

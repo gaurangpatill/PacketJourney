@@ -3,17 +3,23 @@ import type { Env } from "../env";
 export const AI_PROMPT_VERSION = "packet-journey-ai-v1";
 
 export const AI_MODEL_REGISTRY = {
+  "gpt-oss-20b": {
+    id: "@cf/openai/gpt-oss-20b",
+    contextTokens: 128_000,
+    structuredOutput: true,
+    functionCalling: true,
+  },
   "llama-3.3-70b-fast": {
     id: "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
     contextTokens: 24_000,
     structuredOutput: true,
     functionCalling: true,
   },
-  "llama-3.1-8b-fast": {
-    id: "@cf/meta/llama-3.1-8b-instruct-fast",
-    contextTokens: 8_000,
+  "granite-micro": {
+    id: "@cf/ibm-granite/granite-4.0-h-micro",
+    contextTokens: 131_000,
     structuredOutput: true,
-    functionCalling: false,
+    functionCalling: true,
   },
 } as const;
 
@@ -24,6 +30,8 @@ export interface AiRuntimeConfig {
   fixtureMode: boolean;
   modelKey: AiModelKey;
   model: string;
+  plannerModelKey: AiModelKey;
+  plannerModel: string;
   fallbackModel?: string;
   gatewayId: string;
   maximumModelRequests: number;
@@ -37,7 +45,7 @@ export interface AiRuntimeConfig {
 }
 
 function modelKey(value: string | undefined): AiModelKey {
-  return value && value in AI_MODEL_REGISTRY ? (value as AiModelKey) : "llama-3.3-70b-fast";
+  return value && value in AI_MODEL_REGISTRY ? (value as AiModelKey) : "granite-micro";
 }
 
 function boundedInteger(
@@ -52,6 +60,10 @@ function boundedInteger(
 
 export function readAiRuntimeConfig(env: Env): AiRuntimeConfig {
   const selectedKey = modelKey(env.AI_MODEL);
+  const plannerKey =
+    env.AI_PLANNER_MODEL && env.AI_PLANNER_MODEL in AI_MODEL_REGISTRY
+      ? (env.AI_PLANNER_MODEL as AiModelKey)
+      : "granite-micro";
   const fallbackKey =
     env.AI_FALLBACK_MODEL && env.AI_FALLBACK_MODEL in AI_MODEL_REGISTRY
       ? (env.AI_FALLBACK_MODEL as AiModelKey)
@@ -64,6 +76,8 @@ export function readAiRuntimeConfig(env: Env): AiRuntimeConfig {
     fixtureMode,
     modelKey: selectedKey,
     model: AI_MODEL_REGISTRY[selectedKey].id,
+    plannerModelKey: plannerKey,
+    plannerModel: AI_MODEL_REGISTRY[plannerKey].id,
     fallbackModel: fallbackKey ? AI_MODEL_REGISTRY[fallbackKey].id : undefined,
     gatewayId: (env.AI_GATEWAY_ID || "default").slice(0, 80),
     maximumModelRequests: boundedInteger(env.AI_MAX_REQUESTS, 2, 1, 3),
@@ -73,6 +87,6 @@ export function readAiRuntimeConfig(env: Env): AiRuntimeConfig {
     maximumInputCharacters: boundedInteger(env.AI_MAX_INPUT_CHARS, 18_000, 4_000, 40_000),
     maximumOutputCharacters: boundedInteger(env.AI_MAX_OUTPUT_CHARS, 12_000, 2_000, 24_000),
     maximumOutputTokens: boundedInteger(env.AI_MAX_OUTPUT_TOKENS, 1_400, 256, 2_400),
-    modelTimeoutMs: boundedInteger(env.AI_TIMEOUT_MS, 20_000, 2_000, 45_000),
+    modelTimeoutMs: boundedInteger(env.AI_TIMEOUT_MS, 45_000, 2_000, 45_000),
   };
 }

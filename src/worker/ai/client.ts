@@ -1,9 +1,10 @@
 import type { AiModelDiagnosisResult, AiModelUsage, AiPlanningResult, AiToolCall } from "./types";
 import type { AiRuntimeConfig } from "./config";
 import type { InvestigationEvidenceContext, AiToolResult } from "./types";
-import { DIAGNOSIS_JSON_SCHEMA, diagnosisMessages, planningMessages } from "./prompts";
+import { diagnosisMessages, planningMessages } from "./prompts";
 import { modelToolDefinitions } from "./toolRegistry";
 import type { ReferenceCitation } from "../../features/references/schema";
+import { logEvent } from "../logging";
 
 export interface InvestigationAiClient {
   plan(input: {
@@ -57,14 +58,62 @@ function usage(value: unknown): AiModelUsage | undefined {
   return Object.values(result).some((item) => item !== undefined) ? result : undefined;
 }
 
+function safeProviderErrorMessage(value: string): string {
+  return [...value.replace(/Bearer\s+\S+/gi, "Bearer [redacted]")]
+    .map((character) => {
+      const code = character.charCodeAt(0);
+      return code < 32 || code === 127 ? " " : character;
+    })
+    .join("")
+    .slice(0, 600);
+}
+
+function parseJsonObjectText(value: string): unknown {
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    const withoutFence = value
+      .trim()
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/\s*```$/i, "")
+      .trim();
+    try {
+      return JSON.parse(withoutFence) as unknown;
+    } catch {
+      const start = withoutFence.indexOf("{");
+      const end = withoutFence.lastIndexOf("}");
+      if (start >= 0 && end > start) {
+        try {
+          return JSON.parse(withoutFence.slice(start, end + 1)) as unknown;
+        } catch {
+          // The public error remains generic; provider text is never returned to the client.
+        }
+      }
+      throw new AiModelError("invalid_response", "The model did not return valid JSON.");
+    }
+  }
+}
+
 function toolCalls(value: unknown): AiToolCall[] {
   if (!value || typeof value !== "object") return [];
   const root = value as Record<string, unknown>;
+  const choices = Array.isArray(root.choices) ? (root.choices as unknown[]) : [];
+  const firstChoice: unknown = choices[0];
+  const choiceMessage =
+    firstChoice && typeof firstChoice === "object"
+      ? (firstChoice as Record<string, unknown>).message
+      : undefined;
+  const message =
+    choiceMessage && typeof choiceMessage === "object"
+      ? (choiceMessage as Record<string, unknown>)
+      : undefined;
   const raw = Array.isArray(root.tool_calls)
     ? root.tool_calls
     : Array.isArray(root.toolCalls)
       ? root.toolCalls
-      : [];
+      : Array.isArray(message?.tool_calls)
+        ? message.tool_calls
+        : [];
   return raw.flatMap((item, index) => {
     if (!item || typeof item !== "object") return [];
     const call = item as Record<string, unknown>;
@@ -74,13 +123,14 @@ function toolCalls(value: unknown): AiToolCall[] {
         : call;
     if (typeof fn.name !== "string") return [];
     let args: unknown = fn.arguments ?? {};
-    if (typeof args === "string") {
+    for (let depth = 0; depth < 2 && typeof args === "string"; depth += 1) {
       try {
         args = JSON.parse(args) as unknown;
       } catch {
         throw new AiModelError("invalid_response", "The model returned malformed tool arguments.");
       }
     }
+    if (args === null) args = {};
     return [
       {
         id: typeof call.id === "string" ? call.id : `tool-${index}`,
@@ -93,16 +143,52 @@ function toolCalls(value: unknown): AiToolCall[] {
 
 function parseModelOutput(value: unknown, maximumCharacters: number) {
   const root = value && typeof value === "object" ? (value as Record<string, unknown>) : undefined;
-  const candidate = root && "response" in root ? root.response : value;
+  const result =
+    root?.result && typeof root.result === "object"
+      ? (root.result as Record<string, unknown>)
+      : undefined;
+  const choices = root && Array.isArray(root.choices) ? (root.choices as unknown[]) : [];
+  const firstChoice: unknown = choices[0];
+  const choiceMessage =
+    firstChoice && typeof firstChoice === "object"
+      ? (firstChoice as Record<string, unknown>).message
+      : undefined;
+  const messageContent =
+    choiceMessage && typeof choiceMessage === "object"
+      ? (choiceMessage as Record<string, unknown>).content
+      : undefined;
+  logEvent("info", "ai.response.envelope", {
+    rootKeys: Object.keys(root ?? {}).slice(0, 16),
+    resultKeys: Object.keys(result ?? {}).slice(0, 16),
+    firstChoiceKeys:
+      firstChoice && typeof firstChoice === "object" ? Object.keys(firstChoice).slice(0, 12) : [],
+    messageKeys:
+      choiceMessage && typeof choiceMessage === "object"
+        ? Object.keys(choiceMessage).slice(0, 12)
+        : [],
+    responseType: typeof root?.response,
+    messageContentType: typeof messageContent,
+    messageContentLength: typeof messageContent === "string" ? messageContent.length : undefined,
+    messageContentStartsWithObject:
+      typeof messageContent === "string" ? messageContent.trimStart().startsWith("{") : undefined,
+    messageContentEndsWithObject:
+      typeof messageContent === "string" ? messageContent.trimEnd().endsWith("}") : undefined,
+    finishReason:
+      firstChoice && typeof firstChoice === "object"
+        ? (firstChoice as Record<string, unknown>).finish_reason
+        : undefined,
+  });
+  const candidate =
+    root && "response" in root
+      ? root.response
+      : typeof messageContent === "string"
+        ? messageContent
+        : value;
   if (typeof candidate === "string") {
     if (candidate.length > maximumCharacters) {
       throw new AiModelError("invalid_response", "The model output exceeded its size limit.");
     }
-    try {
-      return { output: JSON.parse(candidate) as unknown, rawCharacters: candidate.length };
-    } catch {
-      throw new AiModelError("invalid_response", "The model did not return valid JSON.");
-    }
+    return { output: parseJsonObjectText(candidate), rawCharacters: candidate.length };
   }
   const serialized = JSON.stringify(candidate);
   if (!serialized || serialized.length > maximumCharacters) {
@@ -117,7 +203,12 @@ function parseModelOutput(value: unknown, maximumCharacters: number) {
 export class WorkersAiClient implements InvestigationAiClient {
   constructor(private readonly binding: WorkersAiBindingLike) {}
 
-  private async run(model: string, input: Record<string, unknown>, config: AiRuntimeConfig) {
+  private async run(
+    model: string,
+    input: Record<string, unknown>,
+    config: AiRuntimeConfig,
+    modelKey = config.modelKey,
+  ) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), config.modelTimeoutMs);
     try {
@@ -127,14 +218,27 @@ export class WorkersAiClient implements InvestigationAiClient {
           id: config.gatewayId,
           skipCache: true,
           collectLog: true,
-          metadata: { promptVersion: "packet-journey-ai-v1", modelKey: config.modelKey },
+          metadata: { promptVersion: "packet-journey-ai-v1", modelKey },
           requestTimeoutMs: config.modelTimeoutMs,
           retries: { maxAttempts: 1 },
         },
       });
     } catch (error) {
-      if (controller.signal.aborted) throw new AiModelError("timeout", "AI inference timed out.");
+      if (controller.signal.aborted) {
+        logEvent("error", "ai.inference.timed_out", {
+          model,
+          gatewayId: config.gatewayId,
+          timeoutMs: config.modelTimeoutMs,
+        });
+        throw new AiModelError("timeout", "AI inference timed out.");
+      }
       const message = error instanceof Error ? error.message : "";
+      logEvent("error", "ai.inference.provider_failed", {
+        model,
+        gatewayId: config.gatewayId,
+        providerErrorName: error instanceof Error ? error.name : "UnknownError",
+        providerErrorMessage: safeProviderErrorMessage(message),
+      });
       if (/rate.?limit|too many requests|\b429\b/i.test(message)) {
         throw new AiModelError("rate_limited", "Workers AI rate limited this diagnosis.");
       }
@@ -153,7 +257,7 @@ export class WorkersAiClient implements InvestigationAiClient {
     config: AiRuntimeConfig;
   }): Promise<AiPlanningResult> {
     const output = await this.run(
-      input.config.model,
+      input.config.plannerModel,
       {
         messages: planningMessages(input.question, input.context),
         tools: modelToolDefinitions(),
@@ -161,6 +265,7 @@ export class WorkersAiClient implements InvestigationAiClient {
         max_tokens: 400,
       },
       input.config,
+      input.config.plannerModelKey,
     );
     return {
       toolCalls: toolCalls(output),
@@ -183,8 +288,7 @@ export class WorkersAiClient implements InvestigationAiClient {
         temperature: 0,
         max_tokens: input.config.maximumOutputTokens,
         response_format: {
-          type: "json_schema",
-          json_schema: DIAGNOSIS_JSON_SCHEMA,
+          type: "json_object",
         },
       },
       input.config,

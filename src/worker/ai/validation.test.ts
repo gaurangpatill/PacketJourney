@@ -38,6 +38,17 @@ describe("AI output validation", () => {
     ).toBe("inconclusive");
   });
 
+  it("drops malformed optional enrichment without accepting unsupported claims", () => {
+    const output = {
+      ...inconclusiveDraft("Browser evidence is unavailable."),
+      primaryFinding: { findingId: "wrong-shape" },
+      relatedFindings: [{ findingId: "wrong-shape" }],
+    };
+    const result = validateAiDiagnosisOutput(output, investigationById.get("fast-cached")!);
+    expect(result.primaryFinding).toBeUndefined();
+    expect(result.relatedFindings).toEqual([]);
+  });
+
   it("rejects unknown evidence and stage references", () => {
     const draft = inconclusiveDraft("More evidence is needed.");
     draft.evidenceReferences = [

@@ -6,7 +6,7 @@ The versioned `packet-journey-ai-v1` prompt separates system policy, task instru
 
 ## Model and Gateway
 
-The default registry entry is `@cf/meta/llama-3.3-70b-instruct-fp8-fast`. At implementation time Cloudflare documents a 24,000-token context, function calling, and JSON Mode support. Packet Journey selects it for its context capacity and structured/tool capabilities, not because it is universally best. `AI_MODEL` selects a registry key; model IDs do not appear across feature code. The optional fallback is configuration-ready but is not automatically used in Layer 6 because the two-request planning/diagnosis budget must stay explicit.
+Final diagnosis and bounded tool selection use `@cf/ibm-granite/granite-4.0-h-micro`, a lower-latency function-calling model with messages and JSON-object support. Packet Journey supplies its bounded output contract in the prompt, then independently applies strict Zod, evidence-ID, category, citation, and certainty validation. Provider-side complex schema decoding was removed after live validation showed repeated tail-latency failures across Llama 3.3 70B, GPT-OSS 20B, and Granite; the application does not treat JSON mode as a trust boundary. `AI_MODEL` and `AI_PLANNER_MODEL` remain independently configurable registry keys; model IDs do not appear across feature code.
 
 Both planning and diagnosis use the Workers AI binding and the supported `gateway` option on `env.AI.run`. Gateway ID, prompt version, and model key are bounded metadata; logging and latency/error visibility come from AI Gateway. `skipCache: true` prevents an evidence-bearing answer from being reused across investigations. Retries are limited to one attempt. Account Gateway retention and logging settings must be reviewed before production use.
 

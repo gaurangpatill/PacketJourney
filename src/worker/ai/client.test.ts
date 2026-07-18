@@ -26,15 +26,84 @@ describe("Workers AI client", () => {
       config,
     });
     expect(result.toolCalls[0]?.name).toBe("get_cache_evidence");
+    expect(run.mock.calls[0]?.[0]).toBe("@cf/ibm-granite/granite-4.0-h-micro");
     expect(run.mock.calls[0]?.[2]).toMatchObject({
       gateway: { id: "default", skipCache: true, collectLog: true },
     });
+    const modelInput = run.mock.calls[0]?.[1] as { tools?: unknown[] };
+    expect(modelInput.tools?.[0]).toMatchObject({
+      type: "function",
+      function: { name: "get_investigation_summary" },
+    });
+  });
+
+  it("normalizes double-encoded function arguments without widening tool access", async () => {
+    const run = vi.fn().mockResolvedValue({
+      choices: [
+        {
+          message: {
+            tool_calls: [
+              {
+                id: "call-1",
+                type: "function",
+                function: {
+                  name: "get_tls_evidence",
+                  arguments: JSON.stringify(JSON.stringify({ limit: 10 })),
+                },
+              },
+            ],
+          },
+        },
+      ],
+    });
+    const result = await new WorkersAiClient({ run }).plan({
+      question: "Is the certificate evidence healthy?",
+      context,
+      config,
+    });
+    expect(result.toolCalls).toEqual([
+      { id: "call-1", name: "get_tls_evidence", arguments: { limit: 10 } },
+    ]);
   });
 
   it("parses JSON-mode model output", async () => {
     const draft = inconclusiveDraft("The evidence cannot establish a cause.");
+    const run = vi.fn().mockResolvedValue({ response: JSON.stringify(draft) });
+    const client = new WorkersAiClient({ run });
+    const result = await client.diagnose({
+      question: "Why is this page slow?",
+      context,
+      toolResults: [],
+      config,
+    });
+    expect(result.output).toEqual(draft);
+    expect(run.mock.calls[0]?.[1]).toMatchObject({ response_format: { type: "json_object" } });
+    const modelInput = run.mock.calls[0]?.[1] as {
+      messages?: Array<{ role: string; content: string }>;
+    };
+    expect(modelInput.messages?.[1]?.content).toContain("OUTPUT JSON SCHEMA");
+  });
+
+  it("parses OpenAI-compatible choices output", async () => {
+    const draft = inconclusiveDraft("The evidence cannot establish a cause.");
     const client = new WorkersAiClient({
-      run: vi.fn().mockResolvedValue({ response: JSON.stringify(draft) }),
+      run: vi.fn().mockResolvedValue({
+        choices: [{ message: { role: "assistant", content: JSON.stringify(draft) } }],
+      }),
+    });
+    const result = await client.diagnose({
+      question: "Why is this page slow?",
+      context,
+      toolResults: [],
+      config,
+    });
+    expect(result.output).toEqual(draft);
+  });
+
+  it("extracts a fenced JSON object before strict diagnosis validation", async () => {
+    const draft = inconclusiveDraft("The evidence cannot establish a cause.");
+    const client = new WorkersAiClient({
+      run: vi.fn().mockResolvedValue({ response: `\`\`\`json\n${JSON.stringify(draft)}\n\`\`\`` }),
     });
     const result = await client.diagnose({
       question: "Why is this page slow?",

@@ -255,7 +255,7 @@ Acceptance criteria:
 
 Validated runtime decisions:
 
-- Use `@cf/meta/llama-3.3-70b-instruct-fp8-fast` through the Workers AI binding. Cloudflare currently documents a 24,000-token context window, function calling, and JSON Mode support. The application budgets substantially below that context and centralizes the model ID for safe replacement.
+- Use a centralized Workers AI model registry rather than scattering model IDs. Layer 6 initially selected Llama 3.3 70B; live runtime validation later moved both final diagnosis and bounded planning to `@cf/ibm-granite/granite-4.0-h-micro` after the larger Llama and GPT-OSS models repeatedly exceeded the synchronous product timeout.
 - Route inference with `env.AI.run(model, input, { gateway: { id, skipCache: true } })`. Gateway caching stays disabled because evidence-bearing questions are investigation-specific; no custom cache key is needed in Layer 6.
 - Use at most one traditional function-calling planning round and one structured diagnosis call. The application—not the model—executes fixed read-only tools. This preserves auditability and avoids embedded tools that could acquire external API authority.
 - JSON Mode is only a generation hint. Cloudflare does not guarantee schema compliance, so strict runtime and cross-reference validation remains the product boundary.

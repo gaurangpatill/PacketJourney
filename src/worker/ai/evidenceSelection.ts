@@ -204,12 +204,20 @@ export function selectInvestigationEvidence(input: {
       };
     }),
   );
+  const intentScope = new Set(intentCategories[intent]);
+  const narrowIntent = intent !== "broad" && intent !== "performance";
   const perCategory = new Map<AiCategory, number>();
   const evidence: SelectedAiEvidence[] = [];
   for (const candidate of [...all].sort(
     (left, right) => right.score - left.score || left.item.id.localeCompare(right.item.id),
   )) {
     if (evidence.length >= LIMITS.evidence) break;
+    if (
+      narrowIntent &&
+      !intentScope.has(candidate.category) &&
+      candidate.stage.id !== selectedStageId
+    )
+      continue;
     const count = perCategory.get(candidate.category) ?? 0;
     if (count >= LIMITS.perCategory) continue;
     perCategory.set(candidate.category, count + 1);
