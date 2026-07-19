@@ -86,6 +86,122 @@ describe("evidence-grounded AI orchestrator", () => {
     expect(result.diagnosis.evidenceReferences).toHaveLength(2);
   });
 
+  it("explains certificate-transparency fallback without discarding validity and coverage", async () => {
+    const investigation = structuredClone(investigationById.get("fast-cached")!);
+    const tls = investigation.stages.find((stage) => stage.type === "tls")!;
+    tls.title = "Certificate for example.com";
+    tls.evidence = [
+      {
+        id: "tls-certificate",
+        label: "Normalized certificate",
+        value: {
+          requestedHostname: "example.com",
+          observationKind: "certificate-transparency",
+        },
+        source: "SSLMate Cert Spotter Certificate Transparency API",
+        collectedAt: investigation.createdAt,
+        confidence: "verified",
+      },
+      {
+        id: "tls-validity",
+        label: "Certificate validity",
+        value: {
+          status: "valid",
+          validUntil: "2026-09-01T00:00:00.000Z",
+          daysUntilExpiration: 44,
+        },
+        source: "SSLMate Cert Spotter Certificate Transparency API",
+        collectedAt: investigation.createdAt,
+        confidence: "verified",
+      },
+      {
+        id: "tls-coverage",
+        label: "Hostname coverage",
+        value: { covered: true, matchedName: "example.com" },
+        source: "Deterministic DNS SAN and common-name matcher",
+        collectedAt: investigation.createdAt,
+        confidence: "inferred",
+      },
+      {
+        id: "tls-error",
+        label: "Certificate inspection error",
+        value: { code: "probe_connection_failed", message: "Peer probe failed." },
+        source: "Independent certificate probe state machine",
+        collectedAt: investigation.createdAt,
+        confidence: "verified",
+      },
+    ];
+
+    const result = await diagnoseInvestigation({
+      investigation,
+      question: "Is the certificate evidence healthy?",
+      expertiseMode: "developer",
+      client: {
+        plan: () => Promise.reject(new Error("must not plan")),
+        diagnose: () => Promise.reject(new Error("must not diagnose")),
+      },
+      config,
+    });
+
+    expect(result.diagnosis.conclusionType).toBe("inconclusive");
+    expect(result.diagnosis.summary).toMatch(/issuance evidence was collected/i);
+    expect(result.diagnosis.answer).toMatch(/peer-certificate probe failed/i);
+    expect(result.diagnosis.answer).toMatch(/cannot confirm the certificate currently served/i);
+    expect(result.diagnosis.evidenceReferences.map((item) => item.evidenceId)).toEqual([
+      "tls-validity",
+      "tls-coverage",
+      "tls-certificate",
+      "tls-error",
+    ]);
+  });
+
+  it("reports a healthy independent served-peer certificate with a fetch-session limitation", async () => {
+    const investigation = structuredClone(investigationById.get("fast-cached")!);
+    const tls = investigation.stages.find((stage) => stage.type === "tls")!;
+    tls.title = "Certificate for example.com";
+    tls.evidence = [
+      {
+        id: "tls-certificate",
+        label: "Normalized certificate",
+        value: { requestedHostname: "example.com", observationKind: "served-peer" },
+        source: "Independent Cloudflare Worker node:tls certificate probe",
+        collectedAt: investigation.createdAt,
+        confidence: "verified",
+      },
+      {
+        id: "tls-validity",
+        label: "Certificate validity",
+        value: { status: "valid", validUntil: "2026-09-01T00:00:00.000Z" },
+        source: "Independent Cloudflare Worker node:tls certificate probe",
+        collectedAt: investigation.createdAt,
+        confidence: "verified",
+      },
+      {
+        id: "tls-coverage",
+        label: "Hostname coverage",
+        value: { covered: true, matchedName: "example.com" },
+        source: "Deterministic DNS SAN and common-name matcher",
+        collectedAt: investigation.createdAt,
+        confidence: "inferred",
+      },
+    ];
+
+    const result = await diagnoseInvestigation({
+      investigation,
+      question: "Is the certificate evidence healthy?",
+      expertiseMode: "network-engineer",
+      client: {
+        plan: () => Promise.reject(new Error("must not plan")),
+        diagnose: () => Promise.reject(new Error("must not diagnose")),
+      },
+      config,
+    });
+
+    expect(result.diagnosis.conclusionType).toBe("supported");
+    expect(result.diagnosis.summary).toMatch(/currently valid and covers/i);
+    expect(result.diagnosis.answer).toMatch(/does not expose the certificate selected/i);
+  });
+
   it("skips planning for a narrow explanation while retaining model synthesis", async () => {
     const fixture = new FixtureAiClient();
     let planningCalls = 0;

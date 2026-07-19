@@ -169,9 +169,13 @@ export async function handleAiDiagnosis(input: {
         retryable: false,
       });
     }
+    const fixtureReferences =
+      config.fixtureMode ||
+      (input.env.REFERENCE_FIXTURE_MODE === "true" &&
+        (input.env.ENVIRONMENT === "development" || input.env.ENVIRONMENT === "test"));
     const referenceRetriever =
       parsed.data.referenceMode === "authoritative"
-        ? config.fixtureMode
+        ? fixtureReferences
           ? new FixtureReferenceRetriever()
           : input.env.AI && input.env.TECHNICAL_REFERENCES && input.env.DB
             ? new VectorizeReferenceRetriever(

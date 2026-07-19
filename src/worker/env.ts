@@ -33,6 +33,7 @@ export interface Env {
   REFERENCE_EMBEDDING_MODEL?: string;
   REFERENCE_CORPUS_VERSION?: string;
   REFERENCE_RETRIEVAL_VERSION?: string;
+  REFERENCE_FIXTURE_MODE?: string;
 }
 
 export interface RuntimeLimits {

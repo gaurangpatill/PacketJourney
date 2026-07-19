@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { investigationById } from "../../data/investigations";
 import { createRouter } from "../router";
 import { diagnoseInvestigationResponseSchema } from "../../features/investigation/aiSchema";
+import { FixtureAiClient } from "./fixture";
 
 function diagnosisRequest(id = "fast-cached", referenceMode: "none" | "authoritative" = "none") {
   return new Request(`https://api.example/api/v1/investigations/${id}/diagnose`, {
@@ -45,6 +46,36 @@ describe("AI diagnosis route", () => {
     expect(retrieval.status).toBe("fixture");
     expect(payload.diagnosis.referenceCitations.length).toBeGreaterThan(0);
     expect(technicalReference.citationId).toBe(citation.citationId);
+  });
+
+  it("supports real-AI development with explicitly labeled local reference fixtures", async () => {
+    const response = await createRouter({ aiClient: new FixtureAiClient() })(
+      diagnosisRequest("fast-cached", "authoritative"),
+      {
+        ENVIRONMENT: "development",
+        AI_FIXTURE_MODE: "false",
+        REFERENCE_FIXTURE_MODE: "true",
+      },
+    );
+    expect(response.status).toBe(200);
+    const payload = diagnoseInvestigationResponseSchema.parse(await response.json());
+    expect(payload.diagnosis.retrievalMetadata?.status).toBe("fixture");
+    expect(payload.diagnosis.retrievalMetadata?.fixture).toBe(true);
+    expect(payload.diagnosis.referenceCitations.length).toBeGreaterThan(0);
+  });
+
+  it("never enables reference fixtures outside development or test", async () => {
+    const response = await createRouter({ aiClient: new FixtureAiClient() })(
+      diagnosisRequest("fast-cached", "authoritative"),
+      {
+        ENVIRONMENT: "production",
+        REFERENCE_FIXTURE_MODE: "true",
+      },
+    );
+    expect(response.status).toBe(200);
+    const payload = diagnoseInvestigationResponseSchema.parse(await response.json());
+    expect(payload.diagnosis.retrievalMetadata?.status).toBe("unavailable");
+    expect(payload.diagnosis.referenceCitations).toEqual([]);
   });
 
   it("rejects a path and payload investigation mismatch", async () => {

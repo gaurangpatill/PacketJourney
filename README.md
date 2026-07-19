@@ -101,7 +101,7 @@ npm run db:migrate:local
 npm run dev
 ```
 
-`npm run db:migrate:local` applies ordered SQL migrations to the local D1 database. `npm run dev` then starts Vite on port 5173 and a credential-free local Worker on port 8787 using `wrangler.local.jsonc`; Vite proxies `/api` to it. Local D1 and R2 data live in Wrangler's ignored local state. The local config deliberately omits the always-remote `AI` binding and enables visibly labeled deterministic fixture output. Use `npm run dev:worker:ai` with fixture mode disabled for the production-shaped AI binding when Wrangler authentication/runtime access is available. No model API key is used.
+`npm run db:migrate:local` applies ordered SQL migrations to the local D1 database. `npm run dev` then starts Vite on port 5173 and a credential-free local Worker on port 8787 using `wrangler.local.jsonc`; Vite proxies `/api` to it. Local D1 and R2 data live in Wrangler's ignored local state. The local config deliberately omits the always-remote `AI` binding and enables visibly labeled deterministic fixture output. Use `npm run dev:worker:ai` after `wrangler login` to run real Workers AI with explicitly labeled local reference fixtures; this does not require a provisioned Vectorize index. Production-shaped Vectorize/D1 retrieval still uses the normal deployment configuration and never falls back to fixtures. No model API key is used.
 
 There are two distinct AI development modes:
 
@@ -171,6 +171,7 @@ Preview deployment is intentionally not automatic from local development. It req
 - `BROWSER_ENABLED` — `true` or `false`; disables Browser Run cleanly while preserving the Layer 4 HTTP journey.
 - `AI_ENABLED` — disables only the AI endpoint when `false`.
 - `AI_FIXTURE_MODE` — deterministic local/test answers only; ignored outside development/test.
+- `REFERENCE_FIXTURE_MODE` — reviewed local reference passages for development/test only; ignored outside those environments.
 - `AI_GATEWAY_ID` — AI Gateway identifier, default `default`.
 - `AI_MODEL` — configured model-registry key, default `granite-micro` for bounded structured diagnosis latency.
 - `AI_PLANNER_MODEL` — bounded tool-selection model, default `granite-micro`.
