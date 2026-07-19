@@ -174,7 +174,7 @@ Preview deployment is intentionally not automatic from local development. It req
 - `AI_GATEWAY_ID` — AI Gateway identifier, default `default`.
 - `AI_MODEL` — configured model-registry key, default `granite-micro` for bounded structured diagnosis latency.
 - `AI_PLANNER_MODEL` — bounded tool-selection model, default `granite-micro`.
-- `AI_FALLBACK_MODEL`, `AI_MAX_REQUESTS`, `AI_MAX_TOOL_ROUNDS`, `AI_MAX_INPUT_CHARS`, `AI_MAX_OUTPUT_CHARS`, `AI_MAX_OUTPUT_TOKENS`, `AI_TIMEOUT_MS` — optional bounded AI controls; model calls default to a 1,400-token output cap and 45-second timeout.
+- `AI_FALLBACK_MODEL`, `AI_MAX_REQUESTS`, `AI_MAX_TOOL_ROUNDS`, `AI_MAX_INPUT_CHARS`, `AI_MAX_OUTPUT_CHARS`, `AI_MAX_OUTPUT_TOKENS`, `AI_TIMEOUT_MS` — optional bounded AI controls; diagnosis calls default to an 800-token output cap and 45-second hard timeout. Direct DNS, TLS, cache, redirect, and security status questions use evidence-linked deterministic findings without model inference. Other narrow questions skip the planning call when selected evidence is already sufficient.
 - `TECHNICAL_REFERENCES` — versioned Vectorize binding for `packet-journey-references-v1`; absent from credential-free local fixture configuration.
 - `REFERENCE_INDEX_VERSION`, `REFERENCE_EMBEDDING_MODEL`, `REFERENCE_CORPUS_VERSION`, `REFERENCE_RETRIEVAL_VERSION` — independent, non-secret provenance contracts.
 

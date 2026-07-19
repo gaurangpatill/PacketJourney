@@ -46,4 +46,82 @@ describe("evidence-grounded AI orchestrator", () => {
     expect(result.diagnosis.conclusionType).toBe("inconclusive");
     expect(result.diagnosis.source).toBe("evidence-guard");
   });
+
+  it("answers deterministic status questions without model inference", async () => {
+    const client = {
+      plan: () => Promise.reject(new Error("must not plan")),
+      diagnose: () => Promise.reject(new Error("must not diagnose")),
+    };
+    const result = await diagnoseInvestigation({
+      investigation: investigationById.get("fast-cached")!,
+      question: "Is the certificate evidence healthy?",
+      expertiseMode: "developer",
+      selectedStageId: "tls",
+      client,
+      config,
+    });
+
+    expect(result.usage.toolCalls).toEqual([]);
+    expect(result.diagnosis.source).toBe("evidence-guard");
+    expect(result.diagnosis.evidenceReferences.length).toBeGreaterThan(0);
+    expect(result.diagnosis.answer).toMatch(/does not prove/i);
+  });
+
+  it("surfaces an evidence-linked deterministic certificate failure", async () => {
+    const result = await diagnoseInvestigation({
+      investigation: investigationById.get("tls-warning")!,
+      question: "Is the certificate valid?",
+      expertiseMode: "developer",
+      selectedStageId: "tls",
+      client: {
+        plan: () => Promise.reject(new Error("must not plan")),
+        diagnose: () => Promise.reject(new Error("must not diagnose")),
+      },
+      config,
+    });
+
+    expect(result.diagnosis.source).toBe("evidence-guard");
+    expect(result.diagnosis.conclusionType).toBe("supported");
+    expect(result.diagnosis.primaryFinding?.severity).toBe("high");
+    expect(result.diagnosis.evidenceReferences).toHaveLength(2);
+  });
+
+  it("skips planning for a narrow explanation while retaining model synthesis", async () => {
+    const fixture = new FixtureAiClient();
+    let planningCalls = 0;
+    const result = await diagnoseInvestigation({
+      investigation: investigationById.get("fast-cached")!,
+      question: "Explain the certificate evidence.",
+      expertiseMode: "developer",
+      selectedStageId: "tls",
+      client: {
+        plan: () => {
+          planningCalls += 1;
+          return Promise.resolve({ toolCalls: [] });
+        },
+        diagnose: (input) => fixture.diagnose(input),
+      },
+      config,
+    });
+
+    expect(planningCalls).toBe(0);
+    expect(result.diagnosis.source).toBe("fixture");
+  });
+
+  it("returns a deterministic evidence guard when model output is unsafe", async () => {
+    const result = await diagnoseInvestigation({
+      investigation: investigationById.get("fast-cached")!,
+      question: "Explain the certificate evidence.",
+      expertiseMode: "developer",
+      client: {
+        plan: () => Promise.resolve({ toolCalls: [] }),
+        diagnose: () => Promise.resolve({ output: { invented: true }, rawCharacters: 17 }),
+      },
+      config,
+    });
+
+    expect(result.diagnosis.source).toBe("evidence-guard");
+    expect(result.diagnosis.conclusionType).toBe("inconclusive");
+    expect(result.diagnosis.answer).toMatch(/could not safely validate/i);
+  });
 });

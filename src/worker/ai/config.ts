@@ -86,7 +86,7 @@ export function readAiRuntimeConfig(env: Env): AiRuntimeConfig {
     maximumTotalToolCalls: 4,
     maximumInputCharacters: boundedInteger(env.AI_MAX_INPUT_CHARS, 18_000, 4_000, 40_000),
     maximumOutputCharacters: boundedInteger(env.AI_MAX_OUTPUT_CHARS, 12_000, 2_000, 24_000),
-    maximumOutputTokens: boundedInteger(env.AI_MAX_OUTPUT_TOKENS, 1_400, 256, 2_400),
+    maximumOutputTokens: boundedInteger(env.AI_MAX_OUTPUT_TOKENS, 800, 256, 2_400),
     modelTimeoutMs: boundedInteger(env.AI_TIMEOUT_MS, 45_000, 2_000, 45_000),
   };
 }

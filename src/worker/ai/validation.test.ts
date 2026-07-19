@@ -49,6 +49,50 @@ describe("AI output validation", () => {
     expect(result.relatedFindings).toEqual([]);
   });
 
+  it("projects model output onto the diagnosis allowlist", () => {
+    const output = {
+      ...inconclusiveDraft("Browser evidence is unavailable."),
+      reasoning: "This provider-specific field is not part of the product contract.",
+    };
+    const result = validateAiDiagnosisOutput(output, investigationById.get("fast-cached")!);
+    expect(result).not.toHaveProperty("reasoning");
+    expect(result.answer).toBe("Browser evidence is unavailable.");
+  });
+
+  it("replaces an oversized summary with a bounded neutral summary", () => {
+    const output = {
+      ...inconclusiveDraft("Browser evidence is unavailable."),
+      summary: "Overlong model summary. ".repeat(40),
+    };
+    const result = validateAiDiagnosisOutput(output, investigationById.get("fast-cached")!);
+    expect(result.summary).toBe(
+      "The available evidence is not sufficient for a definitive conclusion.",
+    );
+    expect(result.answer).toBe("Browser evidence is unavailable.");
+  });
+
+  it("wraps a single schema-valid evidence reference without weakening ID checks", () => {
+    const draft = inconclusiveDraft("The cache observation is bounded.");
+    const output = {
+      ...draft,
+      conclusionType: "supported",
+      confidence: 0.6,
+      evidenceReferences: {
+        evidenceId: "cache-e1",
+        stageId: "cache",
+        claim: "The investigation recorded the cache status.",
+      },
+    };
+    const result = validateAiDiagnosisOutput(output, investigationById.get("fast-cached")!);
+    expect(result.evidenceReferences).toEqual([
+      {
+        evidenceId: "cache-e1",
+        stageId: "cache",
+        claim: "The investigation recorded the cache status.",
+      },
+    ]);
+  });
+
   it("rejects unknown evidence and stage references", () => {
     const draft = inconclusiveDraft("More evidence is needed.");
     draft.evidenceReferences = [
@@ -59,11 +103,37 @@ describe("AI output validation", () => {
     );
   });
 
-  it("rejects overconfident inconclusive output", () => {
+  it("drops unknown graph emphasis without accepting unknown evidence claims", () => {
+    const draft = inconclusiveDraft("The graph hint is non-authoritative.");
+    draft.graphInstructions = {
+      emphasizeStageIds: ["invented-stage", "cache"],
+      emphasizeEvidenceIds: ["invented-evidence", "cache-e1"],
+      dimStageIds: ["invented-stage"],
+      selectedStageId: "invented-stage",
+    };
+    const result = validateAiDiagnosisOutput(draft, investigationById.get("fast-cached")!);
+    expect(result.graphInstructions).toMatchObject({
+      emphasizeStageIds: ["cache"],
+      emphasizeEvidenceIds: ["cache-e1"],
+      dimStageIds: [],
+    });
+    expect(result.graphInstructions.selectedStageId).toBeUndefined();
+  });
+
+  it("normalizes inconclusive confidence downward", () => {
     const draft = inconclusiveDraft("More evidence is needed.");
     draft.confidence = 0.9;
-    expect(() => validateAiDiagnosisOutput(draft, investigationById.get("fast-cached")!)).toThrow(
-      /cannot claim high confidence/i,
+    expect(validateAiDiagnosisOutput(draft, investigationById.get("fast-cached")!).confidence).toBe(
+      0.5,
+    );
+  });
+
+  it("normalizes unsupported confidence downward", () => {
+    const draft = inconclusiveDraft("The requested conclusion is unsupported.");
+    draft.conclusionType = "unsupported";
+    draft.confidence = 0.8;
+    expect(validateAiDiagnosisOutput(draft, investigationById.get("fast-cached")!).confidence).toBe(
+      0.2,
     );
   });
 
@@ -152,5 +222,16 @@ describe("AI output validation", () => {
     expect(() =>
       validateAiDiagnosisOutput(draft, investigationById.get("slow-origin")!, counterfactual),
     ).toThrow(/outside this simulation/i);
+  });
+
+  it("drops irrelevant counterfactual references outside simulation mode", () => {
+    const draft = inconclusiveDraft("This is a measured investigation.");
+    draft.counterfactualReferences = [
+      { type: "change", id: "invented-change", claim: "This field is irrelevant here." },
+    ];
+    expect(
+      validateAiDiagnosisOutput(draft, investigationById.get("fast-cached")!)
+        .counterfactualReferences,
+    ).toBeUndefined();
   });
 });

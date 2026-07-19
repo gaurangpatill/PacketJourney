@@ -45,16 +45,40 @@ function allEvidenceReferences(draft: AiDiagnosisDraft) {
     ...draft.relatedFindings.flatMap((finding) => finding.evidenceIds),
     ...draft.prioritizedActions.flatMap((action) => action.evidenceIds),
     ...draft.evidenceReferences.map((reference) => reference.evidenceId),
-    ...draft.graphInstructions.emphasizeEvidenceIds,
   ];
 }
 
 function validArrayItems<T>(value: unknown, schema: z.ZodType<T>): unknown {
-  if (!Array.isArray(value)) return value;
+  if (!Array.isArray(value)) {
+    if (value === undefined) return value;
+    const parsed = schema.safeParse(value);
+    return parsed.success ? [parsed.data] : value;
+  }
   return value.flatMap((item) => {
     const parsed = schema.safeParse(item);
     return parsed.success ? [parsed.data] : [];
   });
+}
+
+function boundedSummary(value: unknown, conclusionType: unknown): unknown {
+  if (typeof value !== "string" || value.length <= 500) return value;
+  switch (conclusionType) {
+    case "supported":
+      return "The collected evidence supports a bounded conclusion; review the cited evidence and uncertainties for its scope.";
+    case "likely":
+      return "The collected evidence supports a likely but uncertain conclusion; review the cited evidence and uncertainties for its scope.";
+    case "unsupported":
+      return "The requested conclusion is not supported by the evidence collected in this investigation.";
+    default:
+      return "The available evidence is not sufficient for a definitive conclusion.";
+  }
+}
+
+function conservativeConfidence(value: unknown, conclusionType: unknown): unknown {
+  if (typeof value !== "number" || !Number.isFinite(value)) return value;
+  if (conclusionType === "inconclusive") return Math.min(value, 0.5);
+  if (conclusionType === "unsupported") return Math.min(value, 0.2);
+  return value;
 }
 
 function normalizeOptionalEnrichment(output: unknown): unknown {
@@ -62,7 +86,10 @@ function normalizeOptionalEnrichment(output: unknown): unknown {
   const root = output as Record<string, unknown>;
   const primary = aiFindingSchema.safeParse(root.primaryFinding);
   return {
-    ...root,
+    summary: boundedSummary(root.summary, root.conclusionType),
+    answer: root.answer,
+    confidence: conservativeConfidence(root.confidence, root.conclusionType),
+    conclusionType: root.conclusionType,
     ...(root.primaryFinding === undefined
       ? {}
       : { primaryFinding: primary.success ? primary.data : undefined }),
@@ -79,6 +106,8 @@ function normalizeOptionalEnrichment(output: unknown): unknown {
           ),
         }),
     uncertainties: validArrayItems(root.uncertainties, aiUncertaintySchema),
+    followUpQuestions: root.followUpQuestions,
+    graphInstructions: root.graphInstructions,
   };
 }
 
@@ -112,8 +141,8 @@ export function validateAiDiagnosisOutput(
       `The model response did not match the required diagnosis schema (${issues}).`,
     );
   }
-  const draft = parsed.data;
-  for (const reference of draft.technicalReferences) {
+  const parsedDraft = parsed.data;
+  for (const reference of parsedDraft.technicalReferences) {
     if (!allowedCitationIds.has(reference.citationId)) {
       throw new AiOutputError(
         "unknown_reference",
@@ -127,6 +156,24 @@ export function validateAiDiagnosisOutput(
     ),
   );
   const stageIds = new Set(investigation.stages.map((stage) => stage.id));
+  const draft: AiDiagnosisDraft = {
+    ...parsedDraft,
+    ...(counterfactual ? {} : { counterfactualReferences: undefined }),
+    graphInstructions: {
+      ...parsedDraft.graphInstructions,
+      emphasizeStageIds: parsedDraft.graphInstructions.emphasizeStageIds.filter((id) =>
+        stageIds.has(id),
+      ),
+      emphasizeEvidenceIds: parsedDraft.graphInstructions.emphasizeEvidenceIds.filter((id) =>
+        evidenceToStage.has(id),
+      ),
+      dimStageIds: parsedDraft.graphInstructions.dimStageIds.filter((id) => stageIds.has(id)),
+      ...(parsedDraft.graphInstructions.selectedStageId &&
+      stageIds.has(parsedDraft.graphInstructions.selectedStageId)
+        ? { selectedStageId: parsedDraft.graphInstructions.selectedStageId }
+        : { selectedStageId: undefined }),
+    },
+  };
   const findingIds = new Set(investigation.findings.map((finding) => finding.id));
   const changeIds = new Set(counterfactual?.changes.map((change) => change.id) ?? []);
   const assumptionIds = new Set(
@@ -171,18 +218,6 @@ export function validateAiDiagnosisOutput(
       "unknown_reference",
       "A supported counterfactual explanation must cite a change or assumption ID.",
     );
-  }
-  for (const id of [
-    ...draft.graphInstructions.emphasizeStageIds,
-    ...draft.graphInstructions.dimStageIds,
-    ...(draft.graphInstructions.selectedStageId ? [draft.graphInstructions.selectedStageId] : []),
-  ]) {
-    if (!stageIds.has(id)) {
-      throw new AiOutputError(
-        "unknown_reference",
-        "The model referenced a stage outside this investigation.",
-      );
-    }
   }
   for (const finding of [
     ...(draft.primaryFinding ? [draft.primaryFinding] : []),

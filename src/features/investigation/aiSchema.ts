@@ -144,13 +144,13 @@ export const aiDiagnosisDraftSchema = z
     confidence: z.number().min(0).max(1),
     conclusionType: aiConclusionTypeSchema,
     primaryFinding: aiFindingSchema.optional(),
-    relatedFindings: z.array(aiFindingSchema).max(6),
-    prioritizedActions: z.array(aiActionSchema).max(6),
-    evidenceReferences: z.array(aiEvidenceReferenceSchema).max(16),
+    relatedFindings: z.array(aiFindingSchema).max(6).default([]),
+    prioritizedActions: z.array(aiActionSchema).max(6).default([]),
+    evidenceReferences: z.array(aiEvidenceReferenceSchema).max(16).default([]),
     technicalReferences: z.array(aiTechnicalReferenceSchema).max(8).default([]),
     counterfactualReferences: z.array(aiCounterfactualReferenceSchema).max(16).optional(),
-    uncertainties: z.array(aiUncertaintySchema).max(8),
-    followUpQuestions: z.array(boundedText(240)).max(6),
+    uncertainties: z.array(aiUncertaintySchema).max(8).default([]),
+    followUpQuestions: z.array(boundedText(240)).max(6).default([]),
     graphInstructions: aiGraphInstructionsSchema,
   })
   .strict();

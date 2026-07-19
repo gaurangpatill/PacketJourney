@@ -31,7 +31,7 @@ The existing network endpoint is unchanged. AI never re-runs HTTP, DNS, TLS, cer
 
 ## Cost and abuse limits
 
-The app makes at most two model requests: one optional tool-planning request and one diagnosis. It permits one tool round and four total tools. Native bindings separately limit a coarse client key to eight diagnoses/minute and an investigation-payload hash to three/minute per Cloudflare location. These are abuse brakes, not identity, billing, or exact distributed quotas.
+The app makes at most two model requests: one optional tool-planning request and one diagnosis. Direct health, validity, safety, correctness, and status questions for DNS, TLS, cache, redirects, and security are answered from deterministic findings and limitations without model inference. These responses still cite exact evidence IDs and remain inconclusive when the collected evidence cannot establish overall health. Other narrow questions skip planning when bounded relevant evidence is already present. Broad or performance questions may plan when evidence or resource detail was omitted. The final model diagnosis defaults to an 800-token cap. It permits one tool round and four total tools. Native bindings separately limit a coarse client key to eight diagnoses/minute and an investigation-payload hash to three/minute per Cloudflare location. These are abuse brakes, not identity, billing, or exact distributed quotas.
 
 ## Interface
 
@@ -43,7 +43,7 @@ Beginner, Developer, and Network Engineer modes change prompt depth and presenta
 
 - A submitted canonical payload may be fabricated by its client. Layer 8 persistence validates shape and consistency but does not sign or attest collection provenance.
 - Model output remains probabilistic even after validation; validation prevents dangling references, not every semantic error.
-- JSON Mode does not guarantee schema compliance, so failures are expected and handled.
+- JSON Mode does not guarantee schema compliance. Provider-only root fields and invalid graph-emphasis IDs are discarded, single schema-valid array items are normalized, oversized summary prose is replaced with a neutral bounded summary, and inconclusive confidence can only be reduced. Evidence IDs, stage associations in evidence claims, citation IDs, category compatibility, and unsupported certainty claims are never invented or loosened. Unsafe output becomes a deterministic inconclusive evidence-guard result instead of an upstream 502.
 - Gateway observability can retain configured request data; production account settings require review.
 - Vector retrieval can miss relevant passages or rank imperfect ones. All source text is delimited untrusted input and cannot prove site behavior.
 - A user can explicitly include one selected validated diagnosis in a saved snapshot. D1 stores the structured diagnosis and version metadata, never system prompts or Gateway logs. Public inclusion is separately controlled per share.

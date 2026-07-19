@@ -50,7 +50,7 @@ ${JSON.stringify((input.references ?? []).map((reference) => ({ citationId: refe
 OUTPUT JSON SCHEMA:
 ${JSON.stringify(DIAGNOSIS_JSON_SCHEMA)}
 
-Return one compact JSON object matching that schema. Use no more than one related finding, two actions, five evidence references, two uncertainties, and two follow-up questions. Evidence references must use exact evidence and stage IDs from the context. Technical references must use exact citation IDs supplied above; never generate a reference URL. If COUNTERFACTUAL PROVENANCE is present, counterfactual claims must cite its exact change or assumption IDs. Graph instructions may only use exact stage and evidence IDs.`,
+Return one compact JSON object matching that schema. Keep summary to one sentence and answer to at most three short sentences. Omit optional enrichment unless it materially improves the answer. Use no more than one related finding, one action, three evidence references, one uncertainty, and one follow-up question. Evidence references must use exact evidence and stage IDs from the context. Technical references must use exact citation IDs supplied above; never generate a reference URL. If COUNTERFACTUAL PROVENANCE is present, counterfactual claims must cite its exact change or assumption IDs. Graph instructions may only use exact stage and evidence IDs.`,
     },
   ];
 }
@@ -63,12 +63,8 @@ export const DIAGNOSIS_JSON_SCHEMA = {
     "answer",
     "confidence",
     "conclusionType",
-    "relatedFindings",
-    "prioritizedActions",
     "evidenceReferences",
-    "technicalReferences",
     "uncertainties",
-    "followUpQuestions",
     "graphInstructions",
   ],
   properties: {

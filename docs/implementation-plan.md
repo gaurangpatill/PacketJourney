@@ -545,7 +545,7 @@ Validation:
 Known limitations:
 
 - Submitted canonical evidence is not signed or persisted and therefore is not provenance.
-- JSON Mode is not a schema guarantee; invalid output is rejected rather than repaired or shown.
+- JSON Mode is not a schema guarantee. Cosmetic shape differences are normalized only where semantics cannot become stronger, while invalid evidence references or unsupported claims remain rejected. Rejected model output now produces a deterministic inconclusive evidence-guard result rather than an HTTP 502. Direct protocol status questions bypass inference entirely and use evidence-linked deterministic findings and limitations.
 - Output validation catches structural/citation/selected causation failures but cannot prove every interpretation semantically correct.
 - AI Gateway retention/logging follows account configuration; application logs deliberately omit full user/model content.
 - Real Workers AI and Gateway smoke requires valid Cloudflare account access. Local deterministic fixtures are explicit and do not simulate Gateway observability.
