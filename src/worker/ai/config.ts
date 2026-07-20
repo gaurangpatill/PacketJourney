@@ -80,13 +80,13 @@ export function readAiRuntimeConfig(env: Env): AiRuntimeConfig {
     plannerModel: AI_MODEL_REGISTRY[plannerKey].id,
     fallbackModel: fallbackKey ? AI_MODEL_REGISTRY[fallbackKey].id : undefined,
     gatewayId: (env.AI_GATEWAY_ID || "default").slice(0, 80),
-    maximumModelRequests: boundedInteger(env.AI_MAX_REQUESTS, 2, 1, 3),
-    maximumToolRounds: boundedInteger(env.AI_MAX_TOOL_ROUNDS, 1, 0, 2),
+    maximumModelRequests: boundedInteger(env.AI_MAX_REQUESTS, 1, 1, 3),
+    maximumToolRounds: boundedInteger(env.AI_MAX_TOOL_ROUNDS, 0, 0, 2),
     maximumToolsPerRound: 4,
     maximumTotalToolCalls: 4,
     maximumInputCharacters: boundedInteger(env.AI_MAX_INPUT_CHARS, 18_000, 4_000, 40_000),
     maximumOutputCharacters: boundedInteger(env.AI_MAX_OUTPUT_CHARS, 12_000, 2_000, 24_000),
-    maximumOutputTokens: boundedInteger(env.AI_MAX_OUTPUT_TOKENS, 800, 256, 2_400),
-    modelTimeoutMs: boundedInteger(env.AI_TIMEOUT_MS, 45_000, 2_000, 45_000),
+    maximumOutputTokens: boundedInteger(env.AI_MAX_OUTPUT_TOKENS, 600, 256, 2_400),
+    modelTimeoutMs: boundedInteger(env.AI_TIMEOUT_MS, 15_000, 2_000, 45_000),
   };
 }

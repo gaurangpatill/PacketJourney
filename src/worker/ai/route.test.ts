@@ -18,6 +18,20 @@ function diagnosisRequest(id = "fast-cached", referenceMode: "none" | "authorita
   });
 }
 
+function performanceDiagnosisRequest() {
+  const investigation = investigationById.get("third-party-heavy")!;
+  return new Request(`https://api.example/api/v1/investigations/${investigation.id}/diagnose`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      investigation,
+      question: "Review the page performance evidence and prioritize it.",
+      expertiseMode: "developer",
+      referenceMode: "none",
+    }),
+  });
+}
+
 describe("AI diagnosis route", () => {
   it("returns an explicitly labeled deterministic fixture in test mode", async () => {
     const response = await createRouter()(diagnosisRequest(), {
@@ -76,6 +90,23 @@ describe("AI diagnosis route", () => {
     const payload = diagnoseInvestigationResponseSchema.parse(await response.json());
     expect(payload.diagnosis.retrievalMetadata?.status).toBe("unavailable");
     expect(payload.diagnosis.referenceCitations).toEqual([]);
+  });
+
+  it("returns HTTP 200 with deterministic findings when model validation fails", async () => {
+    const response = await createRouter({
+      aiClient: {
+        plan: () => Promise.resolve({ toolCalls: [] }),
+        diagnose: () => Promise.resolve({ output: { invalid: true }, rawCharacters: 16 }),
+      },
+    })(performanceDiagnosisRequest(), {
+      ENVIRONMENT: "test",
+      AI_FIXTURE_MODE: "false",
+    });
+    expect(response.status).toBe(200);
+    const payload = diagnoseInvestigationResponseSchema.parse(await response.json());
+    expect(payload.diagnosis.source).toBe("evidence-guard");
+    expect(payload.diagnosis.summary).toMatch(/strongest observed slowdown candidate/i);
+    expect(payload.diagnosis.evidenceReferences.length).toBeGreaterThan(0);
   });
 
   it("rejects a path and payload investigation mismatch", async () => {

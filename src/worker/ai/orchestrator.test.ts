@@ -4,6 +4,7 @@ import { investigationById, investigations } from "../../data/investigations";
 import { readAiRuntimeConfig } from "./config";
 import { FixtureAiClient } from "./fixture";
 import { diagnoseInvestigation } from "./orchestrator";
+import { AiModelError } from "./client";
 
 const config = readAiRuntimeConfig({ ENVIRONMENT: "test", AI_FIXTURE_MODE: "true" });
 
@@ -238,6 +239,162 @@ describe("evidence-grounded AI orchestrator", () => {
 
     expect(result.diagnosis.source).toBe("evidence-guard");
     expect(result.diagnosis.conclusionType).toBe("inconclusive");
-    expect(result.diagnosis.answer).toMatch(/could not safely validate/i);
+    expect(result.diagnosis.answer).toMatch(/cannot support a stronger conclusion/i);
+    expect(result.diagnosis.evidenceReferences.length).toBeGreaterThan(0);
+  });
+
+  it("returns a useful deterministic performance diagnosis when model output is invalid", async () => {
+    const investigation = investigationById.get("third-party-heavy")!;
+    const result = await diagnoseInvestigation({
+      investigation,
+      question: "Review the page performance evidence and prioritize it.",
+      expertiseMode: "developer",
+      client: {
+        plan: () => Promise.resolve({ toolCalls: [] }),
+        diagnose: () => Promise.resolve({ output: { invented: true }, rawCharacters: 17 }),
+      },
+      config,
+    });
+
+    expect(result.diagnosis.source).toBe("evidence-guard");
+    expect(result.diagnosis.conclusionType).toBe("likely");
+    expect(result.diagnosis.summary).toMatch(/strongest observed slowdown candidate/i);
+    expect(result.diagnosis.evidenceReferences.length).toBeGreaterThan(0);
+    expect(result.diagnosis.answer).toMatch(/evidence-backed candidates/i);
+  });
+
+  it("answers a direct bottleneck-ranking question without model inference", async () => {
+    const result = await diagnoseInvestigation({
+      investigation: investigationById.get("third-party-heavy")!,
+      question: "What could slow down this page?",
+      expertiseMode: "developer",
+      client: {
+        plan: () => Promise.reject(new Error("must not plan")),
+        diagnose: () => Promise.reject(new Error("must not diagnose")),
+      },
+      config,
+    });
+
+    expect(result.diagnosis.source).toBe("evidence-guard");
+    expect(result.diagnosis.summary).toMatch(/strongest observed slowdown candidate/i);
+    expect(result.diagnosis.evidenceReferences.length).toBeGreaterThan(0);
+  });
+
+  it("continues without optional tools when the planner requests an invalid tool", async () => {
+    const fixture = new FixtureAiClient();
+    const result = await diagnoseInvestigation({
+      investigation: investigationById.get("third-party-heavy")!,
+      question: "Review the page performance evidence and prioritize it.",
+      expertiseMode: "developer",
+      client: {
+        plan: () =>
+          Promise.resolve({
+            toolCalls: [{ id: "bad-tool", name: "fetch_the_internet", arguments: {} }],
+          }),
+        diagnose: (input) => fixture.diagnose(input),
+      },
+      config: { ...config, maximumModelRequests: 2, maximumToolRounds: 1 },
+    });
+
+    expect(result.diagnosis.source).toBe("fixture");
+    expect(result.usage.toolCalls).toEqual([]);
+  });
+
+  it("continues to diagnosis when optional planning output is unusable", async () => {
+    const fixture = new FixtureAiClient();
+    const result = await diagnoseInvestigation({
+      investigation: investigationById.get("third-party-heavy")!,
+      question: "Review the page performance evidence and prioritize it.",
+      expertiseMode: "developer",
+      client: {
+        plan: () =>
+          Promise.reject(new AiModelError("invalid_response", "Malformed planning response.")),
+        diagnose: (input) => fixture.diagnose(input),
+      },
+      config: { ...config, maximumModelRequests: 2, maximumToolRounds: 1 },
+    });
+
+    expect(result.diagnosis.source).toBe("fixture");
+    expect(result.usage.toolCalls).toEqual([]);
+  });
+
+  it("returns deterministic findings when final inference is unavailable", async () => {
+    const result = await diagnoseInvestigation({
+      investigation: investigationById.get("third-party-heavy")!,
+      question: "Review the page performance evidence and prioritize it.",
+      expertiseMode: "developer",
+      client: {
+        plan: () => Promise.resolve({ toolCalls: [] }),
+        diagnose: () =>
+          Promise.reject(new AiModelError("invalid_response", "The model returned invalid JSON.")),
+      },
+      config,
+    });
+
+    expect(result.diagnosis.source).toBe("evidence-guard");
+    expect(result.diagnosis.summary).toMatch(/strongest observed slowdown candidate/i);
+    expect(result.diagnosis.evidenceReferences.length).toBeGreaterThan(0);
+  });
+
+  it("never exposes a model-output failure across the seeded journey shapes", async () => {
+    for (const investigation of investigations) {
+      const result = await diagnoseInvestigation({
+        investigation,
+        question: "Review the page performance evidence and prioritize it.",
+        expertiseMode: "developer",
+        client: {
+          plan: () => Promise.resolve({ toolCalls: [] }),
+          diagnose: () =>
+            Promise.reject(
+              new AiModelError("invalid_response", "The model returned invalid JSON."),
+            ),
+        },
+        config,
+      });
+      expect(result.diagnosis.source).toBe("evidence-guard");
+      expect(result.diagnosis.evidenceReferences.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("preserves counterfactual provenance in a deterministic model-failure fallback", async () => {
+    const result = await diagnoseInvestigation({
+      investigation: investigationById.get("third-party-heavy")!,
+      question: "Review the page performance evidence and prioritize it.",
+      expertiseMode: "developer",
+      counterfactualContext: {
+        label: "SIMULATED · NOT MEASURED",
+        scenarioId: "remove-third-party",
+        ruleId: "third-party.remove.v1",
+        engineVersion: "1.0.0",
+        changes: [
+          {
+            id: "change-third-party",
+            targetId: "browser-group-1",
+            operation: "removed",
+            reason: "The deterministic rule removed one dependency group.",
+            sourceEvidenceIds: [],
+          },
+        ],
+        assumptions: [
+          {
+            id: "assumption-page-stable",
+            statement: "Other page behavior remains unchanged.",
+            importance: "high",
+          },
+        ],
+      },
+      client: {
+        plan: () => Promise.resolve({ toolCalls: [] }),
+        diagnose: () =>
+          Promise.reject(new AiModelError("invalid_response", "The model returned invalid JSON.")),
+      },
+      config,
+    });
+
+    expect(result.diagnosis.source).toBe("evidence-guard");
+    expect(result.diagnosis.counterfactualReferences).toEqual([
+      expect.objectContaining({ type: "change", id: "change-third-party" }),
+      expect.objectContaining({ type: "assumption", id: "assumption-page-stable" }),
+    ]);
   });
 });

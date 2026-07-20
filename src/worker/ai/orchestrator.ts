@@ -8,17 +8,18 @@ import {
 } from "../../features/investigation/aiSchema";
 import type { Investigation } from "../../features/investigation/schema";
 import { AI_PROMPT_VERSION, type AiRuntimeConfig } from "./config";
-import type { InvestigationAiClient } from "./client";
+import { AiModelError, type InvestigationAiClient } from "./client";
 import { selectInvestigationEvidence, relevantEvidenceForIntent } from "./evidenceSelection";
 import { inconclusiveDraft } from "./fixture";
 import { validateAiQuestion } from "./question";
-import { executeAiToolCalls } from "./toolRegistry";
+import { AiToolError, executeAiToolCalls } from "./toolRegistry";
 import type { AiModelUsage } from "./types";
 import { AiOutputError, validateAiDiagnosisOutput } from "./validation";
 import type { ReferenceRetriever } from "../references/retrieval";
 import type { ReferenceRetrievalResult } from "../../features/references/schema";
 import { logEvent } from "../logging";
 import { deterministicStatusDraft } from "./deterministicDiagnosis";
+import { deterministicPerformanceDraft, evidenceGuardDraft } from "./evidenceGuard";
 
 export interface AiInvestigationResult {
   diagnosis: AiDiagnosis;
@@ -129,11 +130,17 @@ export async function diagnoseInvestigation(input: {
     };
   }
 
-  const deterministicDraft = deterministicStatusDraft({
-    question,
-    context,
-    investigation: input.investigation,
-  });
+  const deterministicDraft =
+    deterministicStatusDraft({
+      question,
+      context,
+      investigation: input.investigation,
+    }) ??
+    deterministicPerformanceDraft({
+      question,
+      context,
+      investigation: input.investigation,
+    });
   if (deterministicDraft) {
     const retrieval =
       input.referenceMode === "authoritative" && input.referenceRetriever
@@ -167,9 +174,18 @@ export async function diagnoseInvestigation(input: {
   }
 
   const planningRequired = shouldPlanWithModel(context, input.config);
-  const planning = planningRequired
-    ? await input.client.plan({ question, context, config: input.config })
-    : { toolCalls: [] };
+  let planning: Awaited<ReturnType<InvestigationAiClient["plan"]>> = { toolCalls: [] };
+  if (planningRequired) {
+    try {
+      planning = await input.client.plan({ question, context, config: input.config });
+    } catch (error) {
+      if (!(error instanceof AiModelError)) throw error;
+      logEvent("warn", "ai.planning.rejected", {
+        investigationId: input.investigation.id,
+        errorCode: error.code,
+      });
+    }
+  }
   if (!planningRequired) {
     logEvent("info", "ai.planning.skipped", {
       investigationId: input.investigation.id,
@@ -186,11 +202,20 @@ export async function diagnoseInvestigation(input: {
         call.arguments && typeof call.arguments === "object" ? call.arguments : "invalid-shape",
     })),
   });
-  const toolResults = executeAiToolCalls({
-    investigation: input.investigation,
-    calls: planning.toolCalls,
-    maximumCalls: Math.min(input.config.maximumToolsPerRound, input.config.maximumTotalToolCalls),
-  });
+  let toolResults: ReturnType<typeof executeAiToolCalls> = [];
+  try {
+    toolResults = executeAiToolCalls({
+      investigation: input.investigation,
+      calls: planning.toolCalls,
+      maximumCalls: Math.min(input.config.maximumToolsPerRound, input.config.maximumTotalToolCalls),
+    });
+  } catch (error) {
+    if (!(error instanceof AiToolError)) throw error;
+    logEvent("warn", "ai.tools.rejected", {
+      investigationId: input.investigation.id,
+      toolCode: error.code,
+    });
+  }
   const retrieval =
     input.referenceMode === "authoritative" && input.referenceRetriever
       ? await input.referenceRetriever.retrieve({
@@ -199,16 +224,17 @@ export async function diagnoseInvestigation(input: {
           expertiseMode: input.expertiseMode,
         })
       : undefined;
-  const modelResult = await input.client.diagnose({
-    question,
-    context,
-    toolResults,
-    config: input.config,
-    references: retrieval?.citations ?? [],
-  });
   let validationFallback = false;
   let draft: ReturnType<typeof validateAiDiagnosisOutput>;
+  let modelResult: Awaited<ReturnType<InvestigationAiClient["diagnose"]>> | undefined;
   try {
+    modelResult = await input.client.diagnose({
+      question,
+      context,
+      toolResults,
+      config: input.config,
+      references: retrieval?.citations ?? [],
+    });
     draft = validateAiDiagnosisOutput(
       modelResult.output,
       input.investigation,
@@ -216,15 +242,26 @@ export async function diagnoseInvestigation(input: {
       new Set(retrieval?.citations.map((citation) => citation.citationId) ?? []),
     );
   } catch (error) {
-    if (!(error instanceof AiOutputError)) throw error;
+    if (!(error instanceof AiOutputError) && !(error instanceof AiModelError)) throw error;
     validationFallback = true;
     logEvent("warn", "ai.output.rejected", {
       investigationId: input.investigation.id,
-      validationCode: error.code,
-      validationMessage: error.message.slice(0, 400),
+      rejectionType: error.name,
+      rejectionCode: error.code,
+      rejectionMessage: error.message.slice(0, 400),
     });
-    draft = inconclusiveDraft(
-      "Workers AI returned a response that Packet Journey could not safely validate against the collected evidence. No model conclusion was displayed.",
+    draft = validateAiDiagnosisOutput(
+      evidenceGuardDraft({
+        investigation: input.investigation,
+        context,
+        reason:
+          error instanceof AiOutputError
+            ? "Workers AI output did not pass evidence validation."
+            : "Workers AI inference did not return a usable structured diagnosis.",
+      }),
+      input.investigation,
+      input.counterfactualContext,
+      new Set(retrieval?.citations.map((citation) => citation.citationId) ?? []),
     );
   }
   const diagnosis = completeDiagnosis({
@@ -242,15 +279,15 @@ export async function diagnoseInvestigation(input: {
         : "workers-ai",
     retrieval,
   });
-  const tokenUsage = mergeUsage(planning.usage, modelResult.usage);
+  const tokenUsage = mergeUsage(planning.usage, modelResult?.usage);
   const usage = aiUsageSummarySchema.parse({
     model: diagnosis.model,
     promptVersion: AI_PROMPT_VERSION,
     gateway: input.config.gatewayId,
-    gatewayLogId: modelResult.gatewayLogId ?? planning.gatewayLogId,
+    gatewayLogId: modelResult?.gatewayLogId ?? planning.gatewayLogId,
     ...tokenUsage,
     inputCharacters: context.serialized.length,
-    outputCharacters: modelResult.rawCharacters,
+    outputCharacters: modelResult?.rawCharacters ?? JSON.stringify(draft).length,
     toolCalls: toolResults.map((result) => result.name),
     fixture: input.config.fixtureMode,
     omittedEvidenceCount: context.omission.omittedEvidenceCount,
