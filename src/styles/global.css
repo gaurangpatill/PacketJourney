@@ -4631,3 +4631,294 @@ a {
     font-size: 14px;
   }
 }
+
+/* Request journey readability and progressive branch disclosure */
+.journey-panel .panel-heading {
+  min-height: 58px;
+  padding: 10px 16px;
+}
+.journey-panel .panel-heading h2 {
+  font-size: 16px;
+  letter-spacing: -0.01em;
+}
+.journey-panel .panel-kicker {
+  margin-bottom: 3px;
+  font-size: 8px;
+}
+.journey-panel .graph-canvas {
+  height: 525px;
+  padding: 0;
+  overscroll-behavior: contain;
+  touch-action: none;
+}
+.graph-canvas__grid {
+  opacity: 0.16;
+}
+.graph-node {
+  padding: 13px 14px 12px;
+  border-color: #3a4550;
+  border-radius: 8px;
+  box-shadow:
+    0 12px 30px rgb(0 0 0 / 28%),
+    inset 0 1px rgb(255 255 255 / 4%);
+}
+.graph-node:hover {
+  border-color: #64717d;
+  transform: translateY(-2px);
+}
+.graph-node.is-selected {
+  border-color: var(--orange-soft);
+  box-shadow:
+    0 0 0 3px rgb(246 130 31 / 15%),
+    0 16px 34px rgb(0 0 0 / 36%);
+}
+.graph-node.is-secondary,
+.graph-node.is-inferred {
+  border-width: 1.5px;
+  border-style: dashed;
+}
+.graph-node.is-warning::before,
+.graph-node.is-error::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  border-radius: 8px 0 0 8px;
+  background: var(--yellow);
+}
+.graph-node.is-error::before {
+  background: var(--red);
+}
+.graph-node.is-bottleneck::after {
+  inset: 5px;
+  border: 1px solid rgb(230 185 92 / 35%);
+  border-left-width: 4px;
+}
+.graph-node__top {
+  height: 29px;
+  gap: 8px;
+}
+.graph-node__top > i {
+  width: 29px;
+  height: 29px;
+  border-radius: 6px;
+}
+.graph-node__top > b {
+  font-size: 9px;
+  letter-spacing: 0.09em;
+}
+.graph-node__top > b::before {
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+}
+.graph-node__top em {
+  margin-left: 2px;
+  padding: 4px 5px;
+  font-size: 8px;
+}
+.graph-node__duration {
+  margin-left: auto;
+  padding: 5px 7px;
+  border: 1px solid #343e48;
+  border-radius: 5px;
+  color: #c5cdd3;
+  background: #0b0f13;
+  font: 10px var(--font-mono);
+  white-space: nowrap;
+}
+.graph-node.is-warning .graph-node__duration,
+.graph-node.is-bottleneck .graph-node__duration {
+  color: #e7c77d;
+  border-color: rgb(230 185 92 / 34%);
+  background: rgb(230 185 92 / 7%);
+}
+.graph-node.is-error .graph-node__duration {
+  color: #ee9b9b;
+  border-color: rgb(242 104 104 / 35%);
+  background: rgb(242 104 104 / 7%);
+}
+.graph-node__title {
+  display: -webkit-box;
+  margin: 11px 0 7px;
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.18;
+  white-space: normal;
+  text-overflow: initial;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.graph-node__meta {
+  gap: 9px;
+  padding-top: 8px;
+  color: #7e8993;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+.graph-node__meta b {
+  color: #aeb7be;
+  font-weight: 500;
+}
+.graph-node__meta i:last-child {
+  margin-left: auto;
+  text-transform: uppercase;
+}
+.graph-edge__line {
+  stroke: #697683;
+  stroke-width: 2;
+}
+.graph-edge--primary .graph-edge__line {
+  stroke: #a7b1ba;
+  stroke-width: 2.8;
+  filter: drop-shadow(0 0 3px rgb(167 177 186 / 14%));
+}
+.graph-edge--resource .graph-edge__line,
+.graph-edge--inferred .graph-edge__line {
+  stroke: #56636f;
+  stroke-width: 1.6;
+  stroke-dasharray: 5 6;
+}
+.graph-edge--redirect .graph-edge__line,
+.graph-edge--failure .graph-edge__line {
+  stroke-width: 2.6;
+}
+.graph-edge__label text {
+  font-size: 9px;
+}
+.graph-controls {
+  left: 14px;
+  bottom: 14px;
+  padding: 4px;
+}
+.graph-controls button {
+  width: 34px;
+  height: 32px;
+}
+.graph-controls output {
+  width: 48px;
+  font-size: 9px;
+}
+.graph-hint {
+  right: 15px;
+  bottom: 17px;
+  color: #707a84;
+  font-size: 9px;
+}
+.graph-focus-card {
+  position: absolute;
+  z-index: 4;
+  top: 13px;
+  right: 13px;
+  max-width: min(310px, calc(100% - 26px));
+  min-height: 48px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid rgb(230 185 92 / 38%);
+  border-left: 3px solid var(--yellow);
+  border-radius: 7px;
+  color: #d6dde2;
+  background: rgb(12 16 20 / 94%);
+  box-shadow: 0 10px 25px rgb(0 0 0 / 28%);
+  text-align: left;
+  cursor: pointer;
+}
+.graph-focus-card.is-error {
+  border-color: rgb(242 104 104 / 38%);
+  border-left-color: var(--red);
+}
+.graph-focus-card > svg {
+  color: var(--yellow);
+}
+.graph-focus-card.is-error > svg {
+  color: var(--red);
+}
+.graph-focus-card span {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.graph-focus-card small {
+  color: #9e8b62;
+  font: 8px var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.graph-focus-card strong {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.graph-focus-card > b {
+  color: #d9bc78;
+  font: 10px var(--font-mono);
+  white-space: nowrap;
+}
+.graph-branch-toggle {
+  position: absolute;
+  z-index: 4;
+  left: 190px;
+  bottom: 14px;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 11px;
+  border: 1px solid var(--line-bright);
+  border-radius: 6px;
+  color: #aeb7be;
+  background: rgb(10 13 16 / 94%);
+  box-shadow: 0 8px 20px rgb(0 0 0 / 22%);
+  font: 9px var(--font-mono);
+  cursor: pointer;
+}
+.graph-branch-toggle[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+.journey-timeline {
+  min-height: 78px;
+  padding: 11px 14px;
+}
+.journey-timeline__stages button {
+  padding: 7px 8px;
+  font-size: 9px;
+}
+.journey-timeline__position {
+  font-size: 9px;
+}
+
+@media (max-width: 1120px) {
+  .journey-panel .graph-canvas {
+    height: 500px;
+  }
+}
+
+@media (max-width: 700px) {
+  .journey-panel .panel-heading {
+    min-height: 52px;
+  }
+  .journey-panel .graph-canvas {
+    height: min(64vh, 500px);
+    min-height: 410px;
+  }
+  .graph-focus-card {
+    left: 10px;
+    right: 10px;
+    max-width: none;
+  }
+  .graph-branch-toggle {
+    left: auto;
+    right: 9px;
+    bottom: 9px;
+    max-width: calc(100% - 190px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}

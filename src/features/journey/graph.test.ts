@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { investigationById } from "../../data/investigations";
 import type { Investigation, JourneyStage } from "../investigation/schema";
-import { buildInvestigationGraph } from "./graph";
+import { buildInvestigationGraph, projectJourneyGraph } from "./graph";
 import { layoutInvestigationGraph } from "./layout";
 
 const getInvestigation = (id: string) => investigationById.get(id)!;
@@ -66,6 +66,30 @@ describe("buildInvestigationGraph", () => {
     );
     expect(graph.edges.some((edge) => edge.relationship === "inferred")).toBe(true);
     expect(graph.edges.some((edge) => edge.relationship === "resource")).toBe(true);
+  });
+
+  it("limits resource branches without mutating the canonical graph", () => {
+    const graph = buildInvestigationGraph(getInvestigation("third-party-heavy"));
+    const projection = projectJourneyGraph(graph, { branchLimit: 4 });
+
+    expect(projection.totalBranchCount).toBe(6);
+    expect(projection.hiddenBranchCount).toBe(2);
+    expect(projection.graph.nodes).toHaveLength(graph.nodes.length - 2);
+    expect(graph.nodes).toHaveLength(12);
+    expect(
+      projection.graph.nodes
+        .filter((node) => node.stage.status === "warning")
+        .map((node) => node.id),
+    ).toEqual(expect.arrayContaining(["analytics", "ads"]));
+  });
+
+  it("restores every resource branch in the expanded projection", () => {
+    const graph = buildInvestigationGraph(getInvestigation("third-party-heavy"));
+    const projection = projectJourneyGraph(graph, { expanded: true, branchLimit: 4 });
+
+    expect(projection.graph).toBe(graph);
+    expect(projection.hiddenBranchCount).toBe(0);
+    expect(projection.totalBranchCount).toBe(6);
   });
 
   it("keeps browser completion primary while resource groups branch secondarily", () => {
@@ -144,6 +168,17 @@ describe("layoutInvestigationGraph", () => {
         expect(overlaps).toBe(false);
       }
     }
+  });
+
+  it("places secondary resource branches beneath the primary request rail", () => {
+    const graph = buildInvestigationGraph(getInvestigation("third-party-heavy"));
+    const layout = layoutInvestigationGraph(graph);
+    const primary = layout.nodes.filter((node) => node.path === "primary");
+    const secondary = layout.nodes.filter((node) => node.path === "secondary");
+    const primaryBottom = Math.max(...primary.map((node) => node.y + node.height));
+
+    expect(secondary.every((node) => node.y > primaryBottom)).toBe(true);
+    expect(new Set(secondary.map((node) => node.y)).size).toBeGreaterThanOrEqual(2);
   });
 
   it("handles a synthetic 50-node, 100-edge journey", () => {

@@ -10,10 +10,10 @@ import {
   Search,
   ShieldCheck,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { UrlInvestigationForm } from "../../components/UrlInvestigationForm";
 import { EvidenceInspector } from "../journey/EvidenceInspector";
-import { buildInvestigationGraph } from "../journey/graph";
+import { buildInvestigationGraph, projectJourneyGraph } from "../journey/graph";
 import { JourneyCanvas } from "../journey/JourneyCanvas";
 import { JourneyTimeline } from "../journey/JourneyTimeline";
 import { layoutInvestigationGraph } from "../journey/layout";
@@ -84,16 +84,26 @@ export function InvestigationWorkspace({
     CounterfactualResult | undefined
   >(persistedCounterfactual);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [resourceBranchesExpanded, setResourceBranchesExpanded] = useState(false);
   const [activeDetail, setActiveDetail] = useState<
     "overview" | "dns" | "tls" | "cache" | "browser"
   >("overview");
   const graph = useMemo(() => buildInvestigationGraph(investigation), [investigation]);
-  const layout = useMemo(() => layoutInvestigationGraph(graph), [graph]);
+  const graphProjection = useMemo(
+    () => projectJourneyGraph(graph, { expanded: resourceBranchesExpanded, branchLimit: 4 }),
+    [graph, resourceBranchesExpanded],
+  );
+  const layout = useMemo(
+    () => layoutInvestigationGraph(graphProjection.graph),
+    [graphProjection.graph],
+  );
   const reducedMotion = useReducedMotion();
   const controller = useJourneyController(graph, reducedMotion);
   const selectedNode = graph.nodes.find((node) => node.id === controller.selectedNodeId);
   const selectedEdge = graph.edges.find((edge) => edge.id === controller.selectedEdgeId);
   const mainFinding = investigation.findings[0];
+
+  useEffect(() => setResourceBranchesExpanded(false), [investigation.id]);
 
   return (
     <div className="workspace">
@@ -218,7 +228,7 @@ export function InvestigationWorkspace({
             </div>
           </div>
           <JourneyCanvas
-            graph={graph}
+            graph={graphProjection.graph}
             layout={layout}
             expertise={expertise}
             selectedNodeId={controller.selectedNodeId}
@@ -231,8 +241,23 @@ export function InvestigationWorkspace({
             onClearSelection={controller.clearSelection}
             emphasizedNodeIds={new Set(aiDiagnosis?.graphInstructions.emphasizeStageIds ?? [])}
             aiDimmedNodeIds={new Set(aiDiagnosis?.graphInstructions.dimStageIds ?? [])}
+            branchCount={graphProjection.totalBranchCount}
+            branchesExpanded={resourceBranchesExpanded}
+            onToggleBranches={
+              graphProjection.totalBranchCount > 4
+                ? () => setResourceBranchesExpanded((current) => !current)
+                : undefined
+            }
           />
-          <JourneyTimeline graph={graph} controller={controller} />
+          <JourneyTimeline
+            graph={graph}
+            controller={controller}
+            onStageSelect={(stageId) => {
+              if (graphProjection.hiddenBranchNodeIds.has(stageId)) {
+                setResourceBranchesExpanded(true);
+              }
+            }}
+          />
         </div>
         <div className="workspace-rail">
           {!snapshot ? (
@@ -243,10 +268,20 @@ export function InvestigationWorkspace({
               onDiagnosis={(diagnosis) => {
                 setAiDiagnosis(diagnosis);
                 if (diagnosis.graphInstructions.selectedStageId) {
+                  if (
+                    graphProjection.hiddenBranchNodeIds.has(
+                      diagnosis.graphInstructions.selectedStageId,
+                    )
+                  ) {
+                    setResourceBranchesExpanded(true);
+                  }
                   controller.selectNode(diagnosis.graphInstructions.selectedStageId);
                 }
               }}
               onEvidenceReference={(stageId, evidenceId) => {
+                if (graphProjection.hiddenBranchNodeIds.has(stageId)) {
+                  setResourceBranchesExpanded(true);
+                }
                 controller.selectNode(stageId);
                 window.setTimeout(() => {
                   document

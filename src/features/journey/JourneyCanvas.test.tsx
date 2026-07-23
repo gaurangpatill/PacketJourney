@@ -72,7 +72,7 @@ describe("JourneyCanvas", () => {
     expect(zoom).toHaveTextContent("100%");
   });
 
-  it("only converts wheel input to zoom when the platform zoom modifier is held", () => {
+  it("captures wheel input for canvas panning and reserves modified wheel input for zoom", () => {
     renderCanvas();
     const canvas = screen.getByTestId("journey-canvas");
     const graph = screen.getByRole("group", { name: "Interactive request journey graph" });
@@ -81,7 +81,7 @@ describe("JourneyCanvas", () => {
 
     const ordinaryWheel = new WheelEvent("wheel", { deltaY: 120, bubbles: true, cancelable: true });
     graph.dispatchEvent(ordinaryWheel);
-    expect(ordinaryWheel.defaultPrevented).toBe(false);
+    expect(ordinaryWheel.defaultPrevented).toBe(true);
     expect(zoom.textContent).toBe(initial);
 
     fireEvent.wheel(canvas.querySelector("svg")!, { deltaY: -120, ctrlKey: true });

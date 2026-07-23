@@ -30,11 +30,11 @@ export type LayoutOptions = {
 };
 
 const defaultOptions: Required<LayoutOptions> = {
-  nodeWidth: 140,
-  nodeHeight: 84,
-  horizontalGap: 24,
-  verticalGap: 20,
-  padding: 32,
+  nodeWidth: 208,
+  nodeHeight: 112,
+  horizontalGap: 52,
+  verticalGap: 54,
+  padding: 42,
 };
 
 function computeRanks(nodes: GraphNode[], edges: GraphEdge[]) {
@@ -77,12 +77,35 @@ function computeRanks(nodes: GraphNode[], edges: GraphEdge[]) {
   return rank;
 }
 
-function edgePath(source: PositionedGraphNode, target: PositionedGraphNode) {
+function edgePath(
+  source: PositionedGraphNode,
+  target: PositionedGraphNode,
+  relationship: GraphEdge["relationship"],
+) {
+  if (source.path === "primary" && target.path === "secondary") {
+    const startX = source.x + source.width / 2;
+    const startY = source.y + source.height;
+    const endX = target.x + target.width / 2;
+    const endY = target.y;
+    const bend = Math.max(42, (endY - startY) * 0.52);
+    return `M ${startX} ${startY} C ${startX} ${startY + bend}, ${endX} ${endY - bend}, ${endX} ${endY}`;
+  }
+  if (source.path === "secondary" && target.path === "primary") {
+    const startX = source.x + source.width / 2;
+    const startY = source.y;
+    const endX = target.x + target.width / 2;
+    const endY = target.y + target.height;
+    const bend = Math.max(42, (startY - endY) * 0.52);
+    return `M ${startX} ${startY} C ${startX} ${startY - bend}, ${endX} ${endY + bend}, ${endX} ${endY}`;
+  }
   const startX = source.x + source.width;
   const startY = source.y + source.height / 2;
   const endX = target.x;
   const endY = target.y + target.height / 2;
-  const distance = Math.max(42, (endX - startX) * 0.48);
+  const distance = Math.max(
+    54,
+    Math.abs(endX - startX) * (relationship === "return" ? 0.36 : 0.48),
+  );
   return `M ${startX} ${startY} C ${startX + distance} ${startY}, ${endX - distance} ${endY}, ${endX} ${endY}`;
 }
 
@@ -96,36 +119,50 @@ export function layoutInvestigationGraph(
   }
 
   const ranks = computeRanks(graph.nodes, graph.edges);
-  const groups = new Map<number, GraphNode[]>();
-  for (const node of graph.nodes) {
-    const nodeRank = ranks.get(node.id) ?? 0;
-    const group = groups.get(nodeRank) ?? [];
-    group.push(node);
-    groups.set(nodeRank, group);
+  const primaryNodes = graph.primaryNodeIds
+    .map((id) => graph.nodes.find((node) => node.id === id))
+    .filter((node): node is GraphNode => Boolean(node));
+  const primaryOrder = new Map(primaryNodes.map((node, index) => [node.id, index]));
+  const secondaryNodes = graph.nodes
+    .filter((node) => !primaryOrder.has(node.id))
+    .sort((left, right) => left.stage.branch - right.stage.branch || left.index - right.index);
+  const secondaryOrder = new Map(secondaryNodes.map((node, index) => [node.id, index]));
+  const secondaryColumns = Math.min(5, Math.max(1, secondaryNodes.length));
+  const primaryY = config.padding;
+  const secondaryStartY = primaryY + config.nodeHeight + config.verticalGap;
+  const primaryStep = config.nodeWidth + config.horizontalGap;
+  const branchSourceCounts = new Map<string, number>();
+  for (const edge of graph.edges) {
+    if (!primaryOrder.has(edge.sourceId) || !secondaryOrder.has(edge.targetId)) continue;
+    branchSourceCounts.set(edge.sourceId, (branchSourceCounts.get(edge.sourceId) ?? 0) + 1);
   }
+  const branchAnchorId = [...branchSourceCounts.entries()].sort(
+    (left, right) =>
+      right[1] - left[1] || (primaryOrder.get(left[0]) ?? 0) - (primaryOrder.get(right[0]) ?? 0),
+  )[0]?.[0];
+  const branchAnchorIndex = branchAnchorId ? (primaryOrder.get(branchAnchorId) ?? 0) : 0;
+  const secondaryRowWidth =
+    secondaryColumns * config.nodeWidth + Math.max(0, secondaryColumns - 1) * config.horizontalGap;
+  const branchAnchorCenter =
+    config.padding + branchAnchorIndex * primaryStep + config.nodeWidth / 2;
+  const secondaryStartX = Math.max(config.padding, branchAnchorCenter - secondaryRowWidth / 2);
 
-  for (const group of groups.values()) {
-    group.sort(
-      (a, b) =>
-        (a.path === "primary" ? 0 : 1) - (b.path === "primary" ? 0 : 1) ||
-        a.stage.branch - b.stage.branch ||
-        a.index - b.index,
-    );
-  }
-
-  const maxRank = Math.max(...ranks.values());
-  const maxLaneCount = Math.max(...[...groups.values()].map((group) => group.length));
   const nodes = graph.nodes.map((node) => {
     const rank = ranks.get(node.id) ?? 0;
-    const group = groups.get(rank) ?? [node];
-    const lane = Math.max(
-      0,
-      group.findIndex((candidate) => candidate.id === node.id),
-    );
+    const primaryIndex = primaryOrder.get(node.id);
+    const secondaryIndex = secondaryOrder.get(node.id) ?? 0;
+    const column = secondaryIndex % secondaryColumns;
+    const row = Math.floor(secondaryIndex / secondaryColumns);
     return {
       ...node,
-      x: config.padding + rank * (config.nodeWidth + config.horizontalGap),
-      y: config.padding + lane * (config.nodeHeight + config.verticalGap),
+      x:
+        primaryIndex === undefined
+          ? secondaryStartX + column * primaryStep
+          : config.padding + primaryIndex * primaryStep,
+      y:
+        primaryIndex === undefined
+          ? secondaryStartY + row * (config.nodeHeight + config.verticalGap)
+          : primaryY,
       width: config.nodeWidth,
       height: config.nodeHeight,
       rank,
@@ -139,7 +176,7 @@ export function layoutInvestigationGraph(
     return [
       {
         ...edge,
-        pathData: edgePath(source, target),
+        pathData: edgePath(source, target, edge.relationship),
         labelX: (source.x + source.width + target.x) / 2,
         labelY: (source.y + source.height / 2 + target.y + target.height / 2) / 2 - 9,
       } satisfies PositionedGraphEdge,
@@ -149,10 +186,19 @@ export function layoutInvestigationGraph(
   return {
     nodes,
     edges,
-    width: config.padding * 2 + (maxRank + 1) * config.nodeWidth + maxRank * config.horizontalGap,
+    width: Math.max(
+      config.padding * 2 +
+        primaryNodes.length * config.nodeWidth +
+        Math.max(0, primaryNodes.length - 1) * config.horizontalGap,
+      secondaryStartX + secondaryRowWidth + config.padding,
+    ),
     height:
       config.padding * 2 +
-      maxLaneCount * config.nodeHeight +
-      Math.max(0, maxLaneCount - 1) * config.verticalGap,
+      config.nodeHeight +
+      (secondaryNodes.length > 0
+        ? config.verticalGap +
+          Math.ceil(secondaryNodes.length / secondaryColumns) * config.nodeHeight +
+          Math.max(0, Math.ceil(secondaryNodes.length / secondaryColumns) - 1) * config.verticalGap
+        : 0),
   };
 }

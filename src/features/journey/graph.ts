@@ -33,6 +33,13 @@ export type InvestigationGraph = {
   bottleneckId?: string;
 };
 
+export type JourneyGraphProjection = {
+  graph: InvestigationGraph;
+  hiddenBranchNodeIds: ReadonlySet<string>;
+  hiddenBranchCount: number;
+  totalBranchCount: number;
+};
+
 type GraphSource = Pick<Investigation, "stages" | "findings" | "metrics">;
 
 function evidenceByLabel(stage: JourneyStage, pattern: RegExp) {
@@ -193,5 +200,78 @@ export function buildInvestigationGraph(source: GraphSource): InvestigationGraph
     rootIds: nodes.filter((node) => !targetIds.has(node.id)).map((node) => node.id),
     terminalIds: nodes.filter((node) => !sourceIds.has(node.id)).map((node) => node.id),
     bottleneckId,
+  };
+}
+
+const branchStatusPriority: Record<JourneyStage["status"], number> = {
+  error: 0,
+  warning: 1,
+  active: 2,
+  pending: 3,
+  success: 4,
+};
+
+/**
+ * Creates a canvas-only projection without mutating the canonical investigation graph.
+ * Resource stages are already deterministic aggregates; this limits how many aggregates
+ * compete with the primary request path until the user asks to inspect every branch.
+ */
+export function projectJourneyGraph(
+  source: InvestigationGraph,
+  options: { expanded?: boolean; branchLimit?: number } = {},
+): JourneyGraphProjection {
+  const branchLimit = Math.max(1, options.branchLimit ?? 4);
+  const branchNodes = source.nodes.filter(
+    (node) =>
+      node.path === "secondary" &&
+      (node.stage.type === "resource" || node.stage.type === "third-party"),
+  );
+  if (options.expanded || branchNodes.length <= branchLimit) {
+    return {
+      graph: source,
+      hiddenBranchNodeIds: new Set(),
+      hiddenBranchCount: 0,
+      totalBranchCount: branchNodes.length,
+    };
+  }
+
+  const retainedBranches = new Set(
+    [...branchNodes]
+      .sort(
+        (left, right) =>
+          (left.isBottleneck ? 0 : 1) - (right.isBottleneck ? 0 : 1) ||
+          branchStatusPriority[left.stage.status] - branchStatusPriority[right.stage.status] ||
+          left.stage.branch - right.stage.branch ||
+          left.index - right.index,
+      )
+      .slice(0, branchLimit)
+      .map((node) => node.id),
+  );
+  const hiddenBranchNodeIds = new Set(
+    branchNodes.filter((node) => !retainedBranches.has(node.id)).map((node) => node.id),
+  );
+  const nodes = source.nodes.filter((node) => !hiddenBranchNodeIds.has(node.id));
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  const edges = source.edges.filter(
+    (edge) => nodeIds.has(edge.sourceId) && nodeIds.has(edge.targetId),
+  );
+  const targetIds = new Set(edges.map((edge) => edge.targetId));
+  const sourceIds = new Set(edges.map((edge) => edge.sourceId));
+
+  return {
+    graph: {
+      ...source,
+      nodes,
+      edges,
+      primaryNodeIds: source.primaryNodeIds.filter((id) => nodeIds.has(id)),
+      rootIds: nodes.filter((node) => !targetIds.has(node.id)).map((node) => node.id),
+      terminalIds: nodes.filter((node) => !sourceIds.has(node.id)).map((node) => node.id),
+      ...(source.bottleneckId && nodeIds.has(source.bottleneckId)
+        ? { bottleneckId: source.bottleneckId }
+        : { bottleneckId: undefined }),
+    },
+    hiddenBranchNodeIds,
+    hiddenBranchCount: hiddenBranchNodeIds.size,
+    totalBranchCount: branchNodes.length,
   };
 }

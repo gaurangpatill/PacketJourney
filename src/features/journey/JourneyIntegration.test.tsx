@@ -89,6 +89,31 @@ describe("journey workspace integration", () => {
     expect(screen.getByText("Measured bottleneck")).toBeInTheDocument();
   });
 
+  it("collapses low-priority resource groups until the user expands them", async () => {
+    const user = userEvent.setup();
+    renderWorkspace("third-party-heavy");
+    const canvas = screen.getByTestId("journey-canvas");
+
+    expect(
+      within(canvas).queryByRole("button", { name: /^Application scripts.*success stage/i }),
+    ).not.toBeInTheDocument();
+    await user.click(within(canvas).getByRole("button", { name: "Show all 6 resource groups" }));
+    expect(
+      within(canvas).getByRole("button", { name: /^Application scripts.*success stage/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("expands a hidden resource group when it is selected from the timeline", async () => {
+    const user = userEvent.setup();
+    renderWorkspace("third-party-heavy");
+    const canvas = screen.getByTestId("journey-canvas");
+
+    await user.click(screen.getByRole("listitem", { name: "Go to Application scripts" }));
+    expect(
+      within(canvas).getByRole("button", { name: /^Application scripts.*success stage/i }),
+    ).toHaveAttribute("aria-pressed", "true");
+  });
+
   it("applies validated AI emphasis and navigates to cited evidence", async () => {
     const user = userEvent.setup();
     vi.stubGlobal(

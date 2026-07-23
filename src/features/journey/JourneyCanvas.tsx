@@ -1,10 +1,10 @@
-import { Focus, LocateFixed, Minus, Plus } from "lucide-react";
+import { ChevronDown, Focus, LocateFixed, Minus, Plus, Route } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ExpertiseMode } from "../investigation/schema";
 import { StageIcon } from "../investigation/StageIcon";
 import type { InvestigationGraph } from "./graph";
 import type { JourneyLayout, PositionedGraphNode } from "./layout";
-import { accessibleNodeLabel, nodeDescription, nodeTitle } from "./presentation";
+import { accessibleNodeLabel, nodeTitle } from "./presentation";
 
 type Viewport = { x: number; y: number; scale: number };
 type CanvasSize = { width: number; height: number };
@@ -37,6 +37,9 @@ type JourneyCanvasProps = {
   onClearSelection: () => void;
   emphasizedNodeIds?: ReadonlySet<string>;
   aiDimmedNodeIds?: ReadonlySet<string>;
+  branchCount?: number;
+  branchesExpanded?: boolean;
+  onToggleBranches?: () => void;
 };
 
 export function JourneyCanvas({
@@ -53,8 +56,12 @@ export function JourneyCanvas({
   onClearSelection,
   emphasizedNodeIds = new Set(),
   aiDimmedNodeIds = new Set(),
+  branchCount = 0,
+  branchesExpanded = false,
+  onToggleBranches,
 }: JourneyCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
   const panRef = useRef<
     { pointerId: number; x: number; y: number; originX: number; originY: number } | undefined
   >(undefined);
@@ -73,18 +80,44 @@ export function JourneyCanvas({
     });
   }, [layout.height, layout.width, size.height, size.width]);
 
+  const focusPrimaryPath = useCallback(() => {
+    const primary = layout.nodes.filter((node) => graph.primaryNodeIds.includes(node.id));
+    if (!primary.length) {
+      fitView();
+      return;
+    }
+    const left = Math.min(...primary.map((node) => node.x));
+    const right = Math.max(...primary.map((node) => node.x + node.width));
+    const top = Math.min(...primary.map((node) => node.y));
+    const bottom = Math.max(...primary.map((node) => node.y + node.height));
+    const readableScale = clampScale(
+      Math.max(0.84, Math.min(1, (size.width - 64) / (right - left))),
+    );
+    setViewport({
+      scale: readableScale,
+      x: 30 - left * readableScale,
+      y: (size.height - (bottom - top) * readableScale) / 2 - top * readableScale,
+    });
+  }, [fitView, graph.primaryNodeIds, layout.nodes, size.height, size.width]);
+
   const resetView = useCallback(() => {
-    setViewport({ x: 24, y: Math.max(24, (size.height - layout.height) / 2), scale: 1 });
-  }, [layout.height, size.height]);
+    const primary = layout.nodes.find((node) => graph.primaryNodeIds.includes(node.id));
+    setViewport({
+      x: primary ? 30 - primary.x : 30,
+      y: primary ? (size.height - primary.height) / 2 - primary.y : 30,
+      scale: 1,
+    });
+  }, [graph.primaryNodeIds, layout.nodes, size.height]);
 
   const focusReadableStart = useCallback(() => {
-    const scale = clampScale(Math.min((size.height - 48) / layout.height, 0.75));
+    const first = layout.nodes.find((node) => node.id === graph.primaryNodeIds[0]);
+    const scale = 0.88;
     setViewport({
       scale,
-      x: 24,
-      y: (size.height - layout.height * scale) / 2,
+      x: first ? 22 - first.x * scale : 22,
+      y: first ? (size.height - first.height * scale) / 2 - first.y * scale : 22,
     });
-  }, [layout.height, size.height]);
+  }, [graph.primaryNodeIds, layout.nodes, size.height]);
 
   useEffect(() => {
     const element = containerRef.current;
@@ -102,8 +135,8 @@ export function JourneyCanvas({
 
   useEffect(() => {
     if (size.width < 600) focusReadableStart();
-    else fitView();
-  }, [fitView, focusReadableStart, graph, size.width]);
+    else focusPrimaryPath();
+  }, [focusPrimaryPath, focusReadableStart, graph, size.width]);
 
   const directlyRelated = useMemo(() => {
     if (!selectedNodeId) return new Set<string>();
@@ -125,6 +158,47 @@ export function JourneyCanvas({
       return { scale, x: pointX - worldX * scale, y: pointY - worldY * scale };
     });
   }, []);
+
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const handleWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      if (event.ctrlKey || event.metaKey) {
+        zoomAt(viewport.scale * Math.exp(-event.deltaY * 0.0015), event.clientX, event.clientY);
+        return;
+      }
+      setViewport((current) => ({
+        ...current,
+        x: current.x - (Math.abs(event.deltaX) > 1 ? event.deltaX : event.deltaY),
+      }));
+    };
+    svg.addEventListener("wheel", handleWheel, { passive: false });
+    return () => svg.removeEventListener("wheel", handleWheel);
+  }, [viewport.scale, zoomAt]);
+
+  const focusNode = useCallback(
+    (nodeId: string) => {
+      const node = layout.nodes.find((candidate) => candidate.id === nodeId);
+      if (!node) return;
+      const scale = clampScale(Math.max(viewport.scale, 0.94));
+      setViewport({
+        scale,
+        x: size.width / 2 - (node.x + node.width / 2) * scale,
+        y: size.height / 2 - (node.y + node.height / 2) * scale,
+      });
+      onSelectNode(nodeId);
+    },
+    [layout.nodes, onSelectNode, size.height, size.width, viewport.scale],
+  );
+
+  const focalNode = useMemo(
+    () =>
+      layout.nodes.find((node) => node.id === graph.bottleneckId) ??
+      layout.nodes.find((node) => node.stage.status === "error") ??
+      layout.nodes.find((node) => node.stage.status === "warning"),
+    [graph.bottleneckId, layout.nodes],
+  );
 
   function handlePointerDown(event: React.PointerEvent<SVGSVGElement>) {
     if (event.button !== 0 || event.target !== event.currentTarget) return;
@@ -205,6 +279,7 @@ export function JourneyCanvas({
       data-testid="journey-canvas"
     >
       <svg
+        ref={svgRef}
         width="100%"
         height="100%"
         role="group"
@@ -213,11 +288,6 @@ export function JourneyCanvas({
         onPointerMove={handlePointerMove}
         onPointerUp={stopPanning}
         onPointerCancel={stopPanning}
-        onWheel={(event) => {
-          if (!event.ctrlKey && !event.metaKey) return;
-          event.preventDefault();
-          zoomAt(viewport.scale * Math.exp(-event.deltaY * 0.0015), event.clientX, event.clientY);
-        }}
         onKeyDown={(event) => {
           if (event.key === "Escape") onClearSelection();
         }}
@@ -354,24 +424,22 @@ export function JourneyCanvas({
                   >
                     <span className="graph-node__top">
                       <i>
-                        <StageIcon type={node.stage.type} size={16} />
+                        <StageIcon type={node.stage.type} size={18} />
                       </i>
                       <b>{node.stage.status}</b>
-                      {node.isBottleneck ? <em>BOTTLENECK</em> : null}
                       {node.stage.simulation?.state &&
                       node.stage.simulation.state !== "unchanged" ? (
                         <em>SIM · {node.stage.simulation.state}</em>
                       ) : null}
+                      <span className="graph-node__duration">
+                        {node.stage.durationMs === undefined
+                          ? "Timing —"
+                          : `${node.stage.durationMs} ms`}
+                      </span>
                     </span>
                     <span className="graph-node__title">{nodeTitle(node.stage, expertise)}</span>
-                    <span className="graph-node__summary">
-                      {nodeDescription(node.stage, expertise)}
-                    </span>
                     <span className="graph-node__meta">
-                      <b>
-                        {node.stage.durationMs === undefined ? "—" : `${node.stage.durationMs} ms`}
-                      </b>
-                      <i>{node.stage.evidence.length} evidence</i>
+                      <b>{node.stage.evidence.length} evidence items</b>
                       <i>{node.confidence}</i>
                     </span>
                   </button>
@@ -381,6 +449,38 @@ export function JourneyCanvas({
           </g>
         </g>
       </svg>
+      {focalNode ? (
+        <button
+          className={`graph-focus-card is-${focalNode.stage.status}`}
+          type="button"
+          onClick={() => focusNode(focalNode.id)}
+          aria-label={`Focus ${focalNode.stage.title}`}
+        >
+          <Route size={15} />
+          <span>
+            <small>{focalNode.isBottleneck ? "Primary issue" : "Needs attention"}</small>
+            <strong>{nodeTitle(focalNode.stage, expertise)}</strong>
+          </span>
+          <b>
+            {focalNode.stage.durationMs === undefined
+              ? focalNode.stage.status
+              : `${focalNode.stage.durationMs} ms`}
+          </b>
+        </button>
+      ) : null}
+      {onToggleBranches && branchCount > 4 ? (
+        <button
+          className="graph-branch-toggle"
+          type="button"
+          onClick={onToggleBranches}
+          aria-expanded={branchesExpanded}
+        >
+          <ChevronDown size={14} />
+          {branchesExpanded
+            ? "Collapse resource groups"
+            : `Show all ${branchCount} resource groups`}
+        </button>
+      ) : null}
       <div className="graph-controls" aria-label="Graph view controls">
         <button type="button" onClick={() => zoomAt(viewport.scale * 1.2)} aria-label="Zoom in">
           <Plus size={15} />
@@ -397,7 +497,7 @@ export function JourneyCanvas({
         </button>
         <output aria-label="Zoom level">{Math.round(viewport.scale * 100)}%</output>
       </div>
-      <p className="graph-hint">Drag to pan · Ctrl/⌘ + scroll to zoom · Arrow keys to navigate</p>
+      <p className="graph-hint">Drag or scroll to pan · Ctrl/⌘ + scroll to zoom</p>
     </div>
   );
 }
