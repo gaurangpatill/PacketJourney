@@ -1,4 +1,4 @@
-import { act, render, renderHook, screen } from "@testing-library/react";
+import { act, fireEvent, render, renderHook, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { investigationById } from "../../data/investigations";
@@ -70,6 +70,22 @@ describe("JourneyCanvas", () => {
     await user.click(screen.getByRole("button", { name: "Fit journey to view" }));
     await user.click(screen.getByRole("button", { name: "Reset graph view" }));
     expect(zoom).toHaveTextContent("100%");
+  });
+
+  it("only converts wheel input to zoom when the platform zoom modifier is held", () => {
+    renderCanvas();
+    const canvas = screen.getByTestId("journey-canvas");
+    const graph = screen.getByRole("group", { name: "Interactive request journey graph" });
+    const zoom = screen.getByRole("status", { name: "Zoom level" });
+    const initial = zoom.textContent;
+
+    const ordinaryWheel = new WheelEvent("wheel", { deltaY: 120, bubbles: true, cancelable: true });
+    graph.dispatchEvent(ordinaryWheel);
+    expect(ordinaryWheel.defaultPrevented).toBe(false);
+    expect(zoom.textContent).toBe(initial);
+
+    fireEvent.wheel(canvas.querySelector("svg")!, { deltaY: -120, ctrlKey: true });
+    expect(zoom.textContent).not.toBe(initial);
   });
 
   it("renders a safe empty state", () => {

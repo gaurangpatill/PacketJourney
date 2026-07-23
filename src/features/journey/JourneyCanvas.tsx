@@ -77,6 +77,15 @@ export function JourneyCanvas({
     setViewport({ x: 24, y: Math.max(24, (size.height - layout.height) / 2), scale: 1 });
   }, [layout.height, size.height]);
 
+  const focusReadableStart = useCallback(() => {
+    const scale = clampScale(Math.min((size.height - 48) / layout.height, 0.75));
+    setViewport({
+      scale,
+      x: 24,
+      y: (size.height - layout.height * scale) / 2,
+    });
+  }, [layout.height, size.height]);
+
   useEffect(() => {
     const element = containerRef.current;
     if (!element) return;
@@ -91,7 +100,10 @@ export function JourneyCanvas({
     return () => observer.disconnect();
   }, []);
 
-  useEffect(() => fitView(), [fitView, graph]);
+  useEffect(() => {
+    if (size.width < 600) focusReadableStart();
+    else fitView();
+  }, [fitView, focusReadableStart, graph, size.width]);
 
   const directlyRelated = useMemo(() => {
     if (!selectedNodeId) return new Set<string>();
@@ -202,6 +214,7 @@ export function JourneyCanvas({
         onPointerUp={stopPanning}
         onPointerCancel={stopPanning}
         onWheel={(event) => {
+          if (!event.ctrlKey && !event.metaKey) return;
           event.preventDefault();
           zoomAt(viewport.scale * Math.exp(-event.deltaY * 0.0015), event.clientX, event.clientY);
         }}
@@ -384,7 +397,7 @@ export function JourneyCanvas({
         </button>
         <output aria-label="Zoom level">{Math.round(viewport.scale * 100)}%</output>
       </div>
-      <p className="graph-hint">Drag to pan · Scroll to zoom · Arrow keys to navigate</p>
+      <p className="graph-hint">Drag to pan · Ctrl/⌘ + scroll to zoom · Arrow keys to navigate</p>
     </div>
   );
 }

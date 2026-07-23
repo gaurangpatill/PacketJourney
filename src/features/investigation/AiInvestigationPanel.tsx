@@ -2,11 +2,13 @@ import {
   AlertTriangle,
   ArrowUp,
   CheckCircle2,
+  ChevronDown,
   LoaderCircle,
   RotateCcw,
   Sparkles,
+  Square,
 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { diagnoseInvestigation, InvestigationApiClientError } from "./api";
 import type { AiDiagnosis, AiExpertiseMode, CounterfactualAiContext } from "./aiSchema";
 import type { ExpertiseMode, Investigation } from "./schema";
@@ -18,10 +20,19 @@ const expertiseMap: Record<ExpertiseMode, AiExpertiseMode> = {
   engineer: "network-engineer",
 };
 
+type ConversationTurn = {
+  id: string;
+  question: string;
+  diagnosis?: AiDiagnosis;
+  error?: string;
+  pending: boolean;
+};
+
 function suggestions(investigation: Investigation) {
   const values = [
+    "What website are we tracking?",
     investigation.metrics.browserDurationMs !== undefined
-      ? "What is most likely delaying rendering?"
+      ? "What could slow down this page?"
       : undefined,
     investigation.stages.some((stage) => stage.type === "cache")
       ? "Why was this response not cached?"
@@ -30,11 +41,119 @@ function suggestions(investigation: Investigation) {
       ? "Is the certificate evidence healthy?"
       : undefined,
     investigation.stages.some((stage) => stage.type === "redirect")
-      ? "Do the redirects add avoidable work?"
+      ? "How many redirects occurred?"
       : undefined,
-    "What can the evidence support, and what remains unknown?",
   ];
   return [...new Set(values.filter((item): item is string => Boolean(item)))].slice(0, 4);
+}
+
+function DiagnosisMessage(props: {
+  diagnosis: AiDiagnosis;
+  investigation: Investigation;
+  onEvidenceReference: (stageId: string, evidenceId: string) => void;
+  onFollowUp: (question: string) => void;
+}) {
+  const { diagnosis } = props;
+  return (
+    <div className={`assistant-answer is-${diagnosis.conclusionType}`}>
+      <div className="assistant-answer__status">
+        {diagnosis.conclusionType === "supported" ? (
+          <CheckCircle2 size={15} />
+        ) : (
+          <AlertTriangle size={15} />
+        )}
+        <span>
+          {diagnosis.conclusionType} · {Math.round(diagnosis.confidence * 100)}% confidence
+        </span>
+        <small>{diagnosis.source === "workers-ai" ? "Workers AI" : "Evidence engine"}</small>
+      </div>
+      <h3>{diagnosis.summary}</h3>
+      <p>{diagnosis.answer}</p>
+
+      {diagnosis.evidenceReferences.length > 0 ? (
+        <details className="assistant-disclosure">
+          <summary>
+            <span>{diagnosis.evidenceReferences.length} cited evidence items</span>
+            <ChevronDown size={14} />
+          </summary>
+          <div className="assistant-citations">
+            {diagnosis.evidenceReferences.map((item) => (
+              <button
+                type="button"
+                key={`${item.evidenceId}-${item.claim}`}
+                onClick={() => props.onEvidenceReference(item.stageId, item.evidenceId)}
+              >
+                <code>{item.evidenceId}</code>
+                <span>{item.claim}</span>
+              </button>
+            ))}
+          </div>
+        </details>
+      ) : null}
+
+      {diagnosis.uncertainties.length > 0 ? (
+        <details className="assistant-disclosure">
+          <summary>
+            <span>Limits and uncertainty</span>
+            <ChevronDown size={14} />
+          </summary>
+          <div className="assistant-uncertainties">
+            {diagnosis.uncertainties.map((item) => (
+              <p key={item.statement}>
+                <strong>{item.statement}</strong>
+                <span>{item.reason}</span>
+              </p>
+            ))}
+          </div>
+        </details>
+      ) : null}
+
+      {diagnosis.referenceCitations.length > 0 || diagnosis.retrievalMetadata ? (
+        <details className="assistant-disclosure">
+          <summary>
+            <span>Authoritative references</span>
+            <ChevronDown size={14} />
+          </summary>
+          <ReferenceProvenance diagnosis={diagnosis} />
+        </details>
+      ) : null}
+
+      {diagnosis.prioritizedActions.length > 0 ? (
+        <ol className="assistant-actions">
+          {diagnosis.prioritizedActions.map((action) => (
+            <li key={`${action.priority}-${action.title}`}>
+              <b>{action.priority}</b>
+              <div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const evidenceId = action.evidenceIds[0];
+                    const stage = props.investigation.stages.find((candidate) =>
+                      candidate.evidence.some((item) => item.id === evidenceId),
+                    );
+                    if (stage && evidenceId) props.onEvidenceReference(stage.id, evidenceId);
+                  }}
+                >
+                  {action.title}
+                </button>
+                <span>{action.rationale}</span>
+              </div>
+            </li>
+          ))}
+        </ol>
+      ) : null}
+
+      {diagnosis.followUpQuestions.length > 0 ? (
+        <div className="assistant-followups">
+          {diagnosis.followUpQuestions.map((question) => (
+            <button type="button" key={question} onClick={() => props.onFollowUp(question)}>
+              {question}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 export function AiInvestigationPanel(props: {
@@ -47,18 +166,24 @@ export function AiInvestigationPanel(props: {
 }) {
   const prompts = useMemo(() => suggestions(props.investigation), [props.investigation]);
   const [question, setQuestion] = useState("");
-  const [diagnosis, setDiagnosis] = useState<AiDiagnosis>();
-  const [error, setError] = useState<string>();
-  const [loading, setLoading] = useState(false);
+  const [turns, setTurns] = useState<ConversationTurn[]>([]);
   const [referenceMode, setReferenceMode] = useState<"none" | "authoritative">("authoritative");
   const controllerRef = useRef<AbortController | undefined>(undefined);
+  const loading = turns.some((turn) => turn.pending);
+
+  useEffect(() => {
+    controllerRef.current?.abort();
+    controllerRef.current = undefined;
+    setTurns([]);
+    setQuestion("");
+  }, [props.investigation.id]);
 
   async function submit(value = question) {
     const next = value.trim();
     if (next.length < 4 || loading) return;
-    setQuestion(next);
-    setLoading(true);
-    setError(undefined);
+    const turnId = crypto.randomUUID();
+    setQuestion("");
+    setTurns((current) => [...current, { id: turnId, question: next, pending: true }]);
     const controller = new AbortController();
     controllerRef.current = controller;
     try {
@@ -71,188 +196,147 @@ export function AiInvestigationPanel(props: {
         referenceMode,
         signal: controller.signal,
       });
-      setDiagnosis(response.diagnosis);
+      setTurns((current) =>
+        current.map((turn) =>
+          turn.id === turnId ? { ...turn, pending: false, diagnosis: response.diagnosis } : turn,
+        ),
+      );
       props.onDiagnosis(response.diagnosis);
     } catch (caught) {
-      setError(
+      const message =
         caught instanceof InvestigationApiClientError
           ? caught.details.message
-          : "The evidence-backed diagnosis could not be completed.",
+          : "The evidence-backed diagnosis could not be completed.";
+      setTurns((current) =>
+        current.map((turn) =>
+          turn.id === turnId ? { ...turn, pending: false, error: message } : turn,
+        ),
       );
     } finally {
       controllerRef.current = undefined;
-      setLoading(false);
     }
   }
 
   return (
-    <section className="ai-investigator section-shell" aria-labelledby="ai-investigator-title">
-      <div className="ai-investigator__heading">
+    <aside className="assistant-panel panel" aria-label="Investigation assistant">
+      <header className="assistant-panel__header">
         <div>
-          <p className="panel-kicker">EVIDENCE-GROUNDED AI</p>
-          <h2 id="ai-investigator-title">Ask this investigation</h2>
+          <span className="panel-kicker">EVIDENCE ASSISTANT</span>
+          <h2>Ask the journey</h2>
         </div>
-        <span>
-          <Sparkles size={13} /> Conclusions cite collected evidence
+        <span className="assistant-panel__trust">
+          <Sparkles size={13} /> Evidence linked
         </span>
+      </header>
+
+      <div className="assistant-transcript" aria-live="polite">
+        {turns.length === 0 ? (
+          <div className="assistant-welcome">
+            <Sparkles size={18} />
+            <strong>Ask about this investigation</strong>
+            <p>Direct facts answer immediately. Diagnostic explanations stay tied to evidence.</p>
+            <div className="assistant-suggestions">
+              {prompts.map((prompt) => (
+                <button type="button" key={prompt} onClick={() => void submit(prompt)}>
+                  {prompt}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {turns.map((turn) => (
+          <article className="assistant-turn" key={turn.id}>
+            <div className="assistant-question">
+              <span>You</span>
+              <p>{turn.question}</p>
+            </div>
+            {turn.pending ? (
+              <div className="assistant-progress" role="status">
+                <LoaderCircle className="spin" size={15} />
+                <span>Reviewing the collected evidence…</span>
+              </div>
+            ) : null}
+            {turn.error ? (
+              <div className="assistant-error" role="alert">
+                <AlertTriangle size={15} />
+                <span>{turn.error}</span>
+                <button type="button" onClick={() => void submit(turn.question)}>
+                  <RotateCcw size={13} /> Retry
+                </button>
+              </div>
+            ) : null}
+            {turn.diagnosis ? (
+              <DiagnosisMessage
+                diagnosis={turn.diagnosis}
+                investigation={props.investigation}
+                onEvidenceReference={props.onEvidenceReference}
+                onFollowUp={(followUp) => void submit(followUp)}
+              />
+            ) : null}
+          </article>
+        ))}
       </div>
-      <form
-        className="command-bar"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void submit();
-        }}
-      >
-        <Sparkles size={17} />
-        <input
-          aria-label="Ask about this investigation"
-          value={question}
-          onChange={(event) => setQuestion(event.target.value)}
-          placeholder="Why is this page slow?"
-          maxLength={500}
-          disabled={loading}
-        />
-        <span>{loading ? "Reviewing evidence" : "Evidence AI"}</span>
-        {loading ? (
+
+      <footer className="assistant-composer">
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submit();
+          }}
+        >
+          <textarea
+            aria-label="Ask about this investigation"
+            value={question}
+            onChange={(event) => setQuestion(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                void submit();
+              }
+            }}
+            placeholder="Ask about this journey…"
+            rows={2}
+            maxLength={500}
+            disabled={loading}
+          />
+          {loading ? (
+            <button
+              type="button"
+              aria-label="Cancel diagnosis"
+              onClick={() => controllerRef.current?.abort()}
+            >
+              <Square size={14} />
+            </button>
+          ) : (
+            <button
+              type="submit"
+              disabled={question.trim().length < 4}
+              aria-label="Submit question"
+            >
+              <ArrowUp size={15} />
+            </button>
+          )}
+        </form>
+        <div className="assistant-source-mode" role="group" aria-label="Explanation source mode">
           <button
             type="button"
-            aria-label="Cancel diagnosis"
-            onClick={() => controllerRef.current?.abort()}
+            aria-pressed={referenceMode === "none"}
+            onClick={() => setReferenceMode("none")}
+            disabled={loading}
           >
-            <LoaderCircle className="spin" size={15} />
+            Evidence only
           </button>
-        ) : (
-          <button type="submit" disabled={question.trim().length < 4} aria-label="Submit question">
-            <ArrowUp size={15} />
-          </button>
-        )}
-      </form>
-      <div className="reference-mode" role="group" aria-label="Explanation source mode">
-        <button
-          type="button"
-          aria-pressed={referenceMode === "none"}
-          onClick={() => setReferenceMode("none")}
-          disabled={loading}
-        >
-          Evidence only
-        </button>
-        <button
-          type="button"
-          aria-pressed={referenceMode === "authoritative"}
-          onClick={() => setReferenceMode("authoritative")}
-          disabled={loading}
-        >
-          Evidence + authoritative references
-        </button>
-      </div>
-      {!diagnosis && !error ? (
-        <div className="ai-suggestions" aria-label="Suggested investigation questions">
-          {prompts.map((prompt) => (
-            <button key={prompt} type="button" onClick={() => void submit(prompt)}>
-              {prompt}
-            </button>
-          ))}
-        </div>
-      ) : null}
-      {error ? (
-        <div className="ai-error" role="alert">
-          <AlertTriangle size={16} />
-          <span>{error}</span>
-          <button type="button" onClick={() => void submit()}>
-            <RotateCcw size={13} /> Retry
+          <button
+            type="button"
+            aria-pressed={referenceMode === "authoritative"}
+            onClick={() => setReferenceMode("authoritative")}
+            disabled={loading}
+          >
+            + references
           </button>
         </div>
-      ) : null}
-      {diagnosis ? (
-        <article className={`ai-diagnosis is-${diagnosis.conclusionType}`} aria-live="polite">
-          <header>
-            {diagnosis.conclusionType === "supported" ? (
-              <CheckCircle2 size={17} />
-            ) : (
-              <AlertTriangle size={17} />
-            )}
-            <div>
-              <span>
-                {diagnosis.conclusionType} · {Math.round(diagnosis.confidence * 100)}% confidence
-              </span>
-              <h3>{diagnosis.summary}</h3>
-            </div>
-            <small>{diagnosis.source === "fixture" ? "LOCAL FIXTURE" : diagnosis.model}</small>
-          </header>
-          <p>{diagnosis.answer}</p>
-          {diagnosis.evidenceReferences.length ? (
-            <div className="ai-references">
-              <strong>Evidence used</strong>
-              {diagnosis.evidenceReferences.map((reference) => (
-                <button
-                  type="button"
-                  key={`${reference.evidenceId}-${reference.claim}`}
-                  onClick={() => props.onEvidenceReference(reference.stageId, reference.evidenceId)}
-                >
-                  <code>{reference.evidenceId}</code>
-                  <span>{reference.claim}</span>
-                </button>
-              ))}
-            </div>
-          ) : null}
-          <ReferenceProvenance diagnosis={diagnosis} />
-          {diagnosis.counterfactualReferences?.length ? (
-            <div className="ai-references">
-              <strong>Simulation provenance</strong>
-              {diagnosis.counterfactualReferences.map((reference) => (
-                <div key={`${reference.type}-${reference.id}`}>
-                  <code>{reference.id}</code>
-                  <span>{reference.claim}</span>
-                </div>
-              ))}
-            </div>
-          ) : null}
-          {diagnosis.uncertainties.length ? (
-            <div className="ai-uncertainties">
-              <strong>What remains uncertain</strong>
-              {diagnosis.uncertainties.map((item) => (
-                <p key={item.statement}>
-                  {item.statement} <span>{item.reason}</span>
-                </p>
-              ))}
-            </div>
-          ) : null}
-          {diagnosis.prioritizedActions.length ? (
-            <ol className="ai-actions">
-              {diagnosis.prioritizedActions.map((action) => (
-                <li key={`${action.priority}-${action.title}`}>
-                  <b>{action.priority}</b>
-                  <div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const evidenceId = action.evidenceIds[0];
-                        const stage = props.investigation.stages.find((candidate) =>
-                          candidate.evidence.some((item) => item.id === evidenceId),
-                        );
-                        if (stage && evidenceId) props.onEvidenceReference(stage.id, evidenceId);
-                      }}
-                    >
-                      {action.title}
-                    </button>
-                    <span>{action.rationale}</span>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          ) : null}
-          {diagnosis.followUpQuestions.length ? (
-            <div className="ai-followups">
-              <strong>Continue investigating</strong>
-              {diagnosis.followUpQuestions.map((item) => (
-                <button type="button" key={item} onClick={() => void submit(item)}>
-                  {item}
-                </button>
-              ))}
-            </div>
-          ) : null}
-        </article>
-      ) : null}
-    </section>
+      </footer>
+    </aside>
   );
 }

@@ -107,6 +107,61 @@ describe("AI investigation panel", () => {
     expect(JSON.parse(body as string)).toMatchObject({
       referenceMode: "none",
     });
-    expect(await screen.findByText("EVIDENCE ONLY")).toBeInTheDocument();
+    expect((await screen.findAllByText("Evidence only.")).length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Evidence only" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  it("keeps a conversation transcript across multiple questions", async () => {
+    const user = userEvent.setup();
+    const investigation = investigationById.get("fast-cached")!;
+    let request = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(() => {
+        request += 1;
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              diagnosis: {
+                ...inconclusiveDraft(
+                  request === 1 ? "First grounded answer." : "Second grounded answer.",
+                ),
+                id: `diagnosis-${request}`,
+                question: request === 1 ? "What website is this?" : "What was cached?",
+                generatedAt: "2026-07-17T12:00:00.000Z",
+                model: "deterministic-evidence-guard",
+                promptVersion: "packet-journey-ai-v1",
+                source: "evidence-guard",
+              },
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          ),
+        );
+      }),
+    );
+
+    render(
+      <AiInvestigationPanel
+        investigation={investigation}
+        expertise="developer"
+        onDiagnosis={() => undefined}
+        onEvidenceReference={() => undefined}
+      />,
+    );
+
+    const composer = screen.getByLabelText("Ask about this investigation");
+    await user.type(composer, "What website is this?");
+    await user.click(screen.getByRole("button", { name: "Submit question" }));
+    expect((await screen.findAllByText("First grounded answer.")).length).toBeGreaterThan(0);
+    await user.clear(composer);
+    await user.type(composer, "What was cached?");
+    await user.click(screen.getByRole("button", { name: "Submit question" }));
+    expect((await screen.findAllByText("Second grounded answer.")).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("First grounded answer.").length).toBeGreaterThan(0);
+    expect(screen.getByText("What website is this?")).toBeInTheDocument();
+    expect(screen.getByText("What was cached?")).toBeInTheDocument();
   });
 });

@@ -191,7 +191,10 @@ export function InvestigationWorkspace({
         </div>
       </section>
 
-      <section className="workspace-grid section-shell">
+      <section
+        className="workspace-grid section-shell"
+        aria-label="Investigation journey workspace"
+      >
         <div className="journey-panel panel">
           <div className="panel-heading">
             <div>
@@ -231,12 +234,38 @@ export function InvestigationWorkspace({
           />
           <JourneyTimeline graph={graph} controller={controller} />
         </div>
-        <EvidenceInspector
-          graph={graph}
-          selectedNode={selectedNode}
-          selectedEdge={selectedEdge}
-          expertise={expertise}
-        />
+        <div className="workspace-rail">
+          {!snapshot ? (
+            <AiInvestigationPanel
+              investigation={investigation}
+              expertise={expertise}
+              selectedStageId={controller.selectedNodeId}
+              onDiagnosis={(diagnosis) => {
+                setAiDiagnosis(diagnosis);
+                if (diagnosis.graphInstructions.selectedStageId) {
+                  controller.selectNode(diagnosis.graphInstructions.selectedStageId);
+                }
+              }}
+              onEvidenceReference={(stageId, evidenceId) => {
+                controller.selectNode(stageId);
+                window.setTimeout(() => {
+                  document
+                    .querySelector(`[data-evidence-id="${CSS.escape(evidenceId)}"]`)
+                    ?.scrollIntoView({
+                      behavior: reducedMotion ? "auto" : "smooth",
+                      block: "nearest",
+                    });
+                }, 0);
+              }}
+            />
+          ) : null}
+          <EvidenceInspector
+            graph={graph}
+            selectedNode={selectedNode}
+            selectedEdge={selectedEdge}
+            expertise={expertise}
+          />
+        </div>
       </section>
 
       {snapshot ? (
@@ -253,30 +282,7 @@ export function InvestigationWorkspace({
             <ReferenceProvenance diagnosis={persistedDiagnosis.diagnosis} />
           </section>
         ) : null
-      ) : (
-        <AiInvestigationPanel
-          investigation={investigation}
-          expertise={expertise}
-          selectedStageId={controller.selectedNodeId}
-          onDiagnosis={(diagnosis) => {
-            setAiDiagnosis(diagnosis);
-            if (diagnosis.graphInstructions.selectedStageId) {
-              controller.selectNode(diagnosis.graphInstructions.selectedStageId);
-            }
-          }}
-          onEvidenceReference={(stageId, evidenceId) => {
-            controller.selectNode(stageId);
-            window.setTimeout(() => {
-              document
-                .querySelector(`[data-evidence-id="${CSS.escape(evidenceId)}"]`)
-                ?.scrollIntoView({
-                  behavior: reducedMotion ? "auto" : "smooth",
-                  block: "nearest",
-                });
-            }, 0);
-          }}
-        />
-      )}
+      ) : null}
 
       {snapshot ? (
         persistedCounterfactual ? (

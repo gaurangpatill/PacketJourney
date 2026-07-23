@@ -16,6 +16,18 @@ function renderWorkspace(id = "redirect-chain") {
 afterEach(() => vi.restoreAllMocks());
 
 describe("journey workspace integration", () => {
+  it("places the assistant and evidence inspector beside the journey in one workspace", () => {
+    renderWorkspace("fast-cached");
+    const primary = screen.getByRole("region", { name: "Investigation journey workspace" });
+    expect(within(primary).getByTestId("journey-canvas")).toBeInTheDocument();
+    expect(
+      within(primary).getByRole("complementary", { name: "Investigation assistant" }),
+    ).toBeInTheDocument();
+    expect(
+      within(primary).getByRole("complementary", { name: "Evidence inspector" }),
+    ).toBeInTheDocument();
+  });
+
   it("synchronizes graph selection with evidence inspector", async () => {
     const user = userEvent.setup();
     renderWorkspace();

@@ -30,11 +30,11 @@ export type LayoutOptions = {
 };
 
 const defaultOptions: Required<LayoutOptions> = {
-  nodeWidth: 156,
+  nodeWidth: 140,
   nodeHeight: 84,
-  horizontalGap: 44,
+  horizontalGap: 24,
   verticalGap: 20,
-  padding: 40,
+  padding: 32,
 };
 
 function computeRanks(nodes: GraphNode[], edges: GraphEdge[]) {
