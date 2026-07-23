@@ -280,6 +280,53 @@ describe("evidence-grounded AI orchestrator", () => {
     expect(result.diagnosis.evidenceReferences.length).toBeGreaterThan(0);
   });
 
+  it("answers investigation identity questions from canonical data without model inference", async () => {
+    const investigation = investigationById.get("redirect-chain")!;
+    const result = await diagnoseInvestigation({
+      investigation,
+      question: "What website are we tracking?",
+      expertiseMode: "developer",
+      client: {
+        plan: () => Promise.reject(new Error("must not plan")),
+        diagnose: () => Promise.reject(new Error("must not diagnose")),
+      },
+      config,
+    });
+
+    expect(result.diagnosis.source).toBe("evidence-guard");
+    expect(result.diagnosis.answer).toContain(investigation.normalizedUrl);
+    expect(result.diagnosis.evidenceReferences.length).toBeGreaterThan(0);
+  });
+
+  it("derives direct fact answers from different investigations instead of fixed expected values", async () => {
+    const client = {
+      plan: () => Promise.reject(new Error("must not plan")),
+      diagnose: () => Promise.reject(new Error("must not diagnose")),
+    };
+    const first = investigationById.get("fast-cached")!;
+    const second = investigationById.get("slow-origin")!;
+    const [firstResult, secondResult] = await Promise.all([
+      diagnoseInvestigation({
+        investigation: first,
+        question: "Which site is this investigation about?",
+        expertiseMode: "developer",
+        client,
+        config,
+      }),
+      diagnoseInvestigation({
+        investigation: second,
+        question: "Which site is this investigation about?",
+        expertiseMode: "developer",
+        client,
+        config,
+      }),
+    ]);
+
+    expect(firstResult.diagnosis.answer).toContain(first.normalizedUrl);
+    expect(secondResult.diagnosis.answer).toContain(second.normalizedUrl);
+    expect(firstResult.diagnosis.answer).not.toBe(secondResult.diagnosis.answer);
+  });
+
   it("continues without optional tools when the planner requests an invalid tool", async () => {
     const fixture = new FixtureAiClient();
     const result = await diagnoseInvestigation({

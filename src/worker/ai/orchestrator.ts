@@ -20,6 +20,7 @@ import type { ReferenceRetrievalResult } from "../../features/references/schema"
 import { logEvent } from "../logging";
 import { deterministicStatusDraft } from "./deterministicDiagnosis";
 import { deterministicPerformanceDraft, evidenceGuardDraft } from "./evidenceGuard";
+import { deterministicFactDraft } from "./deterministicFacts";
 
 export interface AiInvestigationResult {
   diagnosis: AiDiagnosis;
@@ -86,6 +87,29 @@ export async function diagnoseInvestigation(input: {
     !input.investigation.stages.some((stage) => stage.id === input.selectedStageId)
   ) {
     throw new Error("The selected stage is not part of this investigation.");
+  }
+  const directFact = deterministicFactDraft({ question, investigation: input.investigation });
+  if (directFact) {
+    const diagnosis = completeDiagnosis({
+      draft: directFact,
+      question,
+      model: "deterministic-evidence-guard",
+      source: "evidence-guard",
+    });
+    return {
+      diagnosis,
+      usage: aiUsageSummarySchema.parse({
+        model: diagnosis.model,
+        promptVersion: AI_PROMPT_VERSION,
+        gateway: input.config.gatewayId,
+        inputCharacters: question.length,
+        outputCharacters: JSON.stringify(diagnosis).length,
+        toolCalls: [],
+        fixture: false,
+        omittedEvidenceCount: 0,
+        omittedResourceCount: 0,
+      }),
+    };
   }
   const counterfactualSerialized = input.counterfactualContext
     ? JSON.stringify({ counterfactual: input.counterfactualContext })
