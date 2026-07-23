@@ -30,7 +30,7 @@ import type { CounterfactualResult } from "../counterfactual/schemas";
 import { CounterfactualComparison } from "../counterfactual/CounterfactualComparison";
 import { SaveInvestigationDialog } from "../persistence/SaveInvestigationDialog";
 import type { SelectedDiagnosis } from "../persistence/schema";
-import { ReferenceProvenance } from "./ReferenceProvenance";
+import { InvestigationWorkspaceLayout, type WorkspaceTab } from "./InvestigationWorkspaceLayout";
 
 const expertiseCopy: Record<ExpertiseMode, { label: string; intro: string }> = {
   beginner: {
@@ -85,6 +85,7 @@ export function InvestigationWorkspace({
   >(persistedCounterfactual);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [resourceBranchesExpanded, setResourceBranchesExpanded] = useState(false);
+  const [workspaceMobileTab, setWorkspaceMobileTab] = useState<WorkspaceTab>("journey");
   const [activeDetail, setActiveDetail] = useState<
     "overview" | "dns" | "tls" | "cache" | "browser"
   >("overview");
@@ -201,123 +202,112 @@ export function InvestigationWorkspace({
         </div>
       </section>
 
-      <section
-        className="workspace-grid section-shell"
-        aria-label="Investigation journey workspace"
-      >
-        <div className="journey-panel panel">
-          <div className="panel-heading">
-            <div>
-              <p className="panel-kicker">REQUEST JOURNEY</p>
-              <h2>
-                {investigation.mock || hasBrowserEvidence
-                  ? "URL to browser evidence"
-                  : "URL to document response"}
-              </h2>
-            </div>
-            <div className="panel-heading__legend">
-              <span>
-                <i className="legend-primary" /> Primary path
-              </span>
-              <span>
-                <i className="legend-warning" /> Attention
-              </span>
-              <span>
-                <i className="legend-inferred" /> Inferred
-              </span>
-            </div>
-          </div>
-          <JourneyCanvas
-            graph={graphProjection.graph}
-            layout={layout}
-            expertise={expertise}
-            selectedNodeId={controller.selectedNodeId}
-            selectedEdgeId={controller.selectedEdgeId}
-            visibleNodeIds={controller.visibleNodeIds}
-            playing={controller.playing}
-            reducedMotion={reducedMotion}
-            onSelectNode={controller.selectNode}
-            onSelectEdge={controller.selectEdge}
-            onClearSelection={controller.clearSelection}
-            emphasizedNodeIds={new Set(aiDiagnosis?.graphInstructions.emphasizeStageIds ?? [])}
-            aiDimmedNodeIds={new Set(aiDiagnosis?.graphInstructions.dimStageIds ?? [])}
-            branchCount={graphProjection.totalBranchCount}
-            branchesExpanded={resourceBranchesExpanded}
-            onToggleBranches={
-              graphProjection.totalBranchCount > 4
-                ? () => setResourceBranchesExpanded((current) => !current)
-                : undefined
-            }
-          />
-          <JourneyTimeline
-            graph={graph}
-            controller={controller}
-            onStageSelect={(stageId) => {
-              if (graphProjection.hiddenBranchNodeIds.has(stageId)) {
-                setResourceBranchesExpanded(true);
-              }
-            }}
-          />
-        </div>
-        <div className="workspace-rail">
-          {!snapshot ? (
-            <AiInvestigationPanel
-              investigation={investigation}
-              expertise={expertise}
-              selectedStageId={controller.selectedNodeId}
-              onDiagnosis={(diagnosis) => {
-                setAiDiagnosis(diagnosis);
-                if (diagnosis.graphInstructions.selectedStageId) {
-                  if (
-                    graphProjection.hiddenBranchNodeIds.has(
-                      diagnosis.graphInstructions.selectedStageId,
-                    )
-                  ) {
-                    setResourceBranchesExpanded(true);
-                  }
-                  controller.selectNode(diagnosis.graphInstructions.selectedStageId);
-                }
-              }}
-              onEvidenceReference={(stageId, evidenceId) => {
-                if (graphProjection.hiddenBranchNodeIds.has(stageId)) {
-                  setResourceBranchesExpanded(true);
-                }
-                controller.selectNode(stageId);
-                window.setTimeout(() => {
-                  document
-                    .querySelector(`[data-evidence-id="${CSS.escape(evidenceId)}"]`)
-                    ?.scrollIntoView({
-                      behavior: reducedMotion ? "auto" : "smooth",
-                      block: "nearest",
-                    });
-                }, 0);
-              }}
-            />
-          ) : null}
+      <InvestigationWorkspaceLayout
+        mobileTab={workspaceMobileTab}
+        onMobileTabChange={setWorkspaceMobileTab}
+        evidence={
           <EvidenceInspector
             graph={graph}
             selectedNode={selectedNode}
             selectedEdge={selectedEdge}
             expertise={expertise}
           />
-        </div>
-      </section>
-
-      {snapshot ? (
-        persistedDiagnosis ? (
-          <section className="snapshot-diagnosis section-shell panel">
-            <p className="panel-kicker">SAVED AI DIAGNOSIS · {persistedDiagnosis.expertiseMode}</p>
-            <h2>{persistedDiagnosis.diagnosis.summary}</h2>
-            <p>{persistedDiagnosis.diagnosis.answer}</p>
-            <small>
-              Confidence {Math.round(persistedDiagnosis.diagnosis.confidence * 100)}% · Generated{" "}
-              {new Date(persistedDiagnosis.diagnosis.generatedAt).toLocaleString()} · Evidence
-              references preserved
-            </small>
-            <ReferenceProvenance diagnosis={persistedDiagnosis.diagnosis} />
-          </section>
-        ) : null
-      ) : null}
+        }
+        journey={
+          <div className="journey-panel panel">
+            <div className="panel-heading">
+              <div>
+                <p className="panel-kicker">REQUEST JOURNEY</p>
+                <h2>
+                  {investigation.mock || hasBrowserEvidence
+                    ? "URL to browser evidence"
+                    : "URL to document response"}
+                </h2>
+              </div>
+              <div className="panel-heading__legend">
+                <span>
+                  <i className="legend-primary" /> Primary path
+                </span>
+                <span>
+                  <i className="legend-warning" /> Attention
+                </span>
+                <span>
+                  <i className="legend-inferred" /> Inferred
+                </span>
+              </div>
+            </div>
+            <JourneyCanvas
+              key={investigation.id}
+              graph={graphProjection.graph}
+              layout={layout}
+              expertise={expertise}
+              selectedNodeId={controller.selectedNodeId}
+              selectedEdgeId={controller.selectedEdgeId}
+              visibleNodeIds={controller.visibleNodeIds}
+              playing={controller.playing}
+              reducedMotion={reducedMotion}
+              onSelectNode={controller.selectNode}
+              onSelectEdge={controller.selectEdge}
+              onClearSelection={controller.clearSelection}
+              emphasizedNodeIds={new Set(aiDiagnosis?.graphInstructions.emphasizeStageIds ?? [])}
+              aiDimmedNodeIds={new Set(aiDiagnosis?.graphInstructions.dimStageIds ?? [])}
+              branchCount={graphProjection.totalBranchCount}
+              branchesExpanded={resourceBranchesExpanded}
+              onToggleBranches={
+                graphProjection.totalBranchCount > 4
+                  ? () => setResourceBranchesExpanded((current) => !current)
+                  : undefined
+              }
+            />
+            <JourneyTimeline
+              graph={graph}
+              controller={controller}
+              onStageSelect={(stageId) => {
+                if (graphProjection.hiddenBranchNodeIds.has(stageId)) {
+                  setResourceBranchesExpanded(true);
+                }
+              }}
+            />
+          </div>
+        }
+        assistant={
+          <AiInvestigationPanel
+            investigation={investigation}
+            expertise={expertise}
+            selectedStageId={controller.selectedNodeId}
+            initialDiagnosis={persistedDiagnosis?.diagnosis}
+            readOnly={Boolean(snapshot)}
+            onDiagnosis={(diagnosis) => {
+              setAiDiagnosis(diagnosis);
+              if (diagnosis.graphInstructions.selectedStageId) {
+                if (
+                  graphProjection.hiddenBranchNodeIds.has(
+                    diagnosis.graphInstructions.selectedStageId,
+                  )
+                ) {
+                  setResourceBranchesExpanded(true);
+                }
+                controller.selectNode(diagnosis.graphInstructions.selectedStageId);
+              }
+            }}
+            onEvidenceReference={(stageId, evidenceId) => {
+              if (graphProjection.hiddenBranchNodeIds.has(stageId)) {
+                setResourceBranchesExpanded(true);
+              }
+              controller.selectNode(stageId);
+              setWorkspaceMobileTab("evidence");
+              window.setTimeout(() => {
+                document
+                  .querySelector(`[data-evidence-id="${CSS.escape(evidenceId)}"]`)
+                  ?.scrollIntoView?.({
+                    behavior: reducedMotion ? "auto" : "smooth",
+                    block: "nearest",
+                  });
+              }, 0);
+            }}
+          />
+        }
+      />
 
       {snapshot ? (
         persistedCounterfactual ? (

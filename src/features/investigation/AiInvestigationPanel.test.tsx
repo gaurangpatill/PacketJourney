@@ -164,4 +164,49 @@ describe("AI investigation panel", () => {
     expect(screen.getByText("What website is this?")).toBeInTheDocument();
     expect(screen.getByText("What was cached?")).toBeInTheDocument();
   });
+
+  it("keeps the multiline composer as the final fixed panel region", async () => {
+    const user = userEvent.setup();
+    render(
+      <AiInvestigationPanel
+        investigation={investigationById.get("fast-cached")!}
+        expertise="developer"
+        onDiagnosis={() => undefined}
+        onEvidenceReference={() => undefined}
+      />,
+    );
+    const composer = screen.getByTestId("assistant-composer");
+    const panel = screen.getByRole("complementary", { name: "Investigation assistant" });
+    const input = screen.getByLabelText("Ask about this investigation");
+    expect(panel.lastElementChild).toBe(composer);
+    await user.type(input, "First line{shift>}{enter}{/shift}Second line");
+    expect(input).toHaveValue("First line\nSecond line");
+  });
+
+  it("supports cancelling an in-flight answer and exposes a retry action", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((_input, init?: RequestInit) => {
+        return new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () =>
+            reject(new DOMException("Cancelled", "AbortError")),
+          );
+        });
+      }),
+    );
+    render(
+      <AiInvestigationPanel
+        investigation={investigationById.get("fast-cached")!}
+        expertise="developer"
+        onDiagnosis={() => undefined}
+        onEvidenceReference={() => undefined}
+      />,
+    );
+    await user.type(screen.getByLabelText("Ask about this investigation"), "Explain the cache");
+    await user.keyboard("{Enter}");
+    await user.click(screen.getByRole("button", { name: "Cancel diagnosis" }));
+    expect(await screen.findByText(/Response cancelled/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Retry/i })).toBeInTheDocument();
+  });
 });

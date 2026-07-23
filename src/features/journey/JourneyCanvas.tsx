@@ -62,6 +62,7 @@ export function JourneyCanvas({
 }: JourneyCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
+  const initializedViewRef = useRef<string | undefined>(undefined);
   const panRef = useRef<
     { pointerId: number; x: number; y: number; originX: number; originY: number } | undefined
   >(undefined);
@@ -134,9 +135,17 @@ export function JourneyCanvas({
   }, []);
 
   useEffect(() => {
+    const signature = graph.primaryNodeIds
+      .map((id) => {
+        const node = graph.nodes.find((candidate) => candidate.id === id);
+        return `${id}:${node?.stage.simulation?.state ?? "observed"}`;
+      })
+      .join("|");
+    if (initializedViewRef.current === signature) return;
+    initializedViewRef.current = signature;
     if (size.width < 600) focusReadableStart();
     else focusPrimaryPath();
-  }, [focusPrimaryPath, focusReadableStart, graph, size.width]);
+  }, [focusPrimaryPath, focusReadableStart, graph.nodes, graph.primaryNodeIds, size.width]);
 
   const directlyRelated = useMemo(() => {
     if (!selectedNodeId) return new Set<string>();

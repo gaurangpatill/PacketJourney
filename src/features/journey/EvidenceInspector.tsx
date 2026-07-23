@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, GitBranch, Info, PanelRight, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Check, GitBranch, Info, ShieldCheck } from "lucide-react";
 import type { EvidenceItem, ExpertiseMode } from "../investigation/schema";
 import { StageIcon } from "../investigation/StageIcon";
 import type { GraphEdge, GraphNode, InvestigationGraph } from "./graph";
@@ -40,6 +40,9 @@ function NodeInspector({ node, expertise }: { node: GraphNode; expertise: Expert
   const visibleEvidence = visibleEvidenceItems(node.stage.evidence, expertise);
   const verified = visibleEvidence.filter((item) => item.confidence === "verified");
   const inferred = visibleEvidence.filter((item) => item.confidence === "inferred");
+  const limitations = node.stage.evidence.filter((item) =>
+    /limitation|unavailable|inspection error|diagnostic error/i.test(item.label),
+  );
   return (
     <>
       <div className="inspector-summary">
@@ -50,7 +53,7 @@ function NodeInspector({ node, expertise }: { node: GraphNode; expertise: Expert
           <p>
             {node.stage.type.replace("-", " ")} · {node.stage.status}
           </p>
-          <strong>{node.stage.title}</strong>
+          <h3>{node.stage.title}</h3>
           <span>{nodeDescription(node.stage, expertise)}</span>
         </div>
       </div>
@@ -113,7 +116,21 @@ function NodeInspector({ node, expertise }: { node: GraphNode; expertise: Expert
               <span>{finding.severity}</span>
               <strong>{finding.title}</strong>
               <p>{finding.explanation}</p>
+              {finding.recommendation ? <small>{finding.recommendation}</small> : null}
             </div>
+          ))}
+        </section>
+      ) : null}
+      {limitations.length ? (
+        <section className="inspector-section inspector-limitations">
+          <h3>
+            <Info size={12} /> Known limitations
+          </h3>
+          {limitations.map((item) => (
+            <p key={item.id}>
+              <strong>{item.label}</strong>
+              <span>{valueText(item.value)}</span>
+            </p>
           ))}
         </section>
       ) : null}
@@ -140,7 +157,7 @@ function EdgeInspector({
         </span>
         <div>
           <p>{edge.relationship} relationship</p>
-          <strong>{edge.label}</strong>
+          <h3>{edge.label}</h3>
           <span>
             {edge.detail ??
               `${source?.stage.title ?? edge.sourceId} to ${target?.stage.title ?? edge.targetId}`}
@@ -204,10 +221,9 @@ export function EvidenceInspector({
     <aside className="evidence-panel panel" aria-label="Evidence inspector">
       <div className="panel-heading">
         <div>
-          <p className="panel-kicker">EVIDENCE INSPECTOR</p>
-          <h2>{selectedNode?.stage.title ?? selectedEdge?.label ?? "Select a graph item"}</h2>
+          <p className="panel-kicker">SELECTED EVIDENCE</p>
+          <h2>Evidence Inspector</h2>
         </div>
-        <PanelRight size={16} />
       </div>
       <div className="evidence-panel__content">
         {selectedNode ? <NodeInspector node={selectedNode} expertise={expertise} /> : null}

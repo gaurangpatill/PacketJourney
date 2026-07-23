@@ -1,6 +1,6 @@
 import { act, fireEvent, render, renderHook, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { investigationById } from "../../data/investigations";
 import { buildInvestigationGraph } from "./graph";
 import { JourneyCanvas } from "./JourneyCanvas";
@@ -11,6 +11,8 @@ const investigation = investigationById.get("fast-cached")!;
 const graph = buildInvestigationGraph(investigation);
 const layout = layoutInvestigationGraph(graph);
 const allVisible = new Set(graph.nodes.map((node) => node.id));
+
+afterEach(() => vi.unstubAllGlobals());
 
 function renderCanvas(overrides: Partial<React.ComponentProps<typeof JourneyCanvas>> = {}) {
   const props: React.ComponentProps<typeof JourneyCanvas> = {
@@ -70,6 +72,50 @@ describe("JourneyCanvas", () => {
     await user.click(screen.getByRole("button", { name: "Fit journey to view" }));
     await user.click(screen.getByRole("button", { name: "Reset graph view" }));
     expect(zoom).toHaveTextContent("100%");
+  });
+
+  it("preserves the camera when a sidebar resize changes the canvas dimensions", async () => {
+    let notifyResize: (() => void) | undefined;
+    class ResizeObserverMock {
+      constructor(callback: () => void) {
+        notifyResize = callback;
+      }
+      observe() {}
+      disconnect() {}
+    }
+    vi.stubGlobal("ResizeObserver", ResizeObserverMock);
+    const user = userEvent.setup();
+    renderCanvas();
+    const canvas = screen.getByTestId("journey-canvas");
+    vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 0,
+      top: 0,
+      right: 720,
+      bottom: 520,
+      left: 0,
+      width: 720,
+      height: 520,
+      toJSON: () => ({}),
+    });
+    act(() => notifyResize?.());
+    await user.click(screen.getByRole("button", { name: "Zoom in" }));
+    const zoom = screen.getByRole("status", { name: "Zoom level" });
+    const beforeResize = zoom.textContent;
+
+    vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 0,
+      top: 0,
+      right: 610,
+      bottom: 520,
+      left: 0,
+      width: 610,
+      height: 520,
+      toJSON: () => ({}),
+    });
+    act(() => notifyResize?.());
+    expect(zoom).toHaveTextContent(beforeResize ?? "");
   });
 
   it("captures wheel input for canvas panning and reserves modified wheel input for zoom", () => {

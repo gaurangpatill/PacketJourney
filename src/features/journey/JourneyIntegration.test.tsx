@@ -4,6 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { investigationById } from "../../data/investigations";
 import { InvestigationWorkspace } from "../investigation/InvestigationWorkspace";
+import type { SelectedDiagnosis } from "../persistence/schema";
 
 function renderWorkspace(id = "redirect-chain") {
   return render(
@@ -12,6 +13,41 @@ function renderWorkspace(id = "redirect-chain") {
     </MemoryRouter>,
   );
 }
+
+const persistedDiagnosis: SelectedDiagnosis = {
+  expertiseMode: "developer",
+  diagnosis: {
+    id: "saved-diagnosis",
+    question: "What is the measured bottleneck?",
+    summary: "The saved evidence identifies the origin wait.",
+    answer: "The origin stage has the largest measured duration in this saved investigation.",
+    confidence: 0.84,
+    conclusionType: "supported",
+    relatedFindings: [],
+    prioritizedActions: [],
+    evidenceReferences: [
+      {
+        evidenceId: "origin-e1",
+        stageId: "origin",
+        claim: "The origin wait was recorded as 1.46 seconds.",
+      },
+    ],
+    technicalReferences: [],
+    uncertainties: [],
+    followUpQuestions: [],
+    graphInstructions: {
+      emphasizeStageIds: ["origin"],
+      emphasizeEvidenceIds: ["origin-e1"],
+      dimStageIds: [],
+      openPanel: "evidence",
+    },
+    generatedAt: "2026-07-17T16:00:00.000Z",
+    model: "fixture",
+    promptVersion: "packet-journey-ai-v1",
+    source: "fixture",
+    referenceCitations: [],
+  },
+};
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -26,6 +62,8 @@ describe("journey workspace integration", () => {
     expect(
       within(primary).getByRole("complementary", { name: "Evidence inspector" }),
     ).toBeInTheDocument();
+    expect(primary.querySelector(".workspace-panel--evidence")).toBe(primary.firstElementChild);
+    expect(primary.querySelector(".workspace-panel--assistant")).toBe(primary.lastElementChild);
   });
 
   it("synchronizes graph selection with evidence inspector", async () => {
@@ -177,5 +215,81 @@ describe("journey workspace integration", () => {
     expect(
       within(screen.getByRole("complementary", { name: "Evidence inspector" })).getByText("1.46 s"),
     ).toBeInTheDocument();
+  });
+
+  it("navigates an evidence citation to the graph and left inspector", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            diagnosis: {
+              ...persistedDiagnosis.diagnosis,
+              id: "citation-navigation",
+              graphInstructions: {
+                emphasizeStageIds: [],
+                emphasizeEvidenceIds: [],
+                dimStageIds: [],
+                openPanel: "none",
+              },
+            },
+          }),
+          { headers: { "content-type": "application/json" } },
+        ),
+      ),
+    );
+    renderWorkspace("slow-origin");
+    await user.type(
+      screen.getByLabelText("Ask about this investigation"),
+      "Show the origin evidence",
+    );
+    await user.click(screen.getByRole("button", { name: "Submit question" }));
+    await user.click(await screen.findByText("1 cited evidence items"));
+    await user.click(screen.getByRole("button", { name: /origin-e1.*origin wait was recorded/i }));
+
+    expect(screen.getByRole("button", { name: /Origin.*warning stage/i })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(
+      within(screen.getByRole("complementary", { name: "Evidence inspector" })).getByRole(
+        "heading",
+        { name: "Application origin" },
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /Evidence/i })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it.each(["saved", "shared"] as const)(
+    "keeps the three-panel workspace compatible with %s snapshots",
+    (kind) => {
+      render(
+        <MemoryRouter>
+          <InvestigationWorkspace
+            investigation={investigationById.get("slow-origin")!}
+            snapshot={{
+              kind,
+              capturedAt: "2026-07-17T16:00:00.000Z",
+              freshnessNotice: "Saved evidence is not refreshed automatically.",
+            }}
+            persistedDiagnosis={persistedDiagnosis}
+          />
+        </MemoryRouter>,
+      );
+      const workspace = screen.getByRole("region", { name: "Investigation journey workspace" });
+      expect(within(workspace).getByTestId("journey-canvas")).toBeInTheDocument();
+      expect(within(workspace).getByText(persistedDiagnosis.diagnosis.summary)).toBeInTheDocument();
+      expect(within(workspace).getByText("Read only")).toBeInTheDocument();
+      expect(screen.queryByTestId("assistant-composer")).not.toBeInTheDocument();
+    },
+  );
+
+  it("keeps counterfactual comparison available below the three-panel workspace", async () => {
+    const user = userEvent.setup();
+    renderWorkspace("slow-origin");
+    await user.click(screen.getByRole("button", { name: /run deterministic simulation/i }));
+    expect(screen.getByText("Synchronized playback")).toBeInTheDocument();
+    expect(screen.getAllByTestId("journey-canvas")).toHaveLength(3);
   });
 });
